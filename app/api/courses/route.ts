@@ -1,3 +1,4 @@
+// Env vars used: GOLF_COURSE_API_KEY (server-side only)
 import { type NextRequest } from 'next/server'
 
 export async function GET(request: NextRequest) {
@@ -6,7 +7,7 @@ export async function GET(request: NextRequest) {
     return Response.json({ courses: [] })
   }
 
-  const apiKey = process.env.NEXT_PUBLIC_GOLF_COURSE_API_KEY
+  const apiKey = process.env.GOLF_COURSE_API_KEY
   const res = await fetch(
     `https://api.golfcourseapi.com/v1/search?search_query=${encodeURIComponent(q)}`,
     {

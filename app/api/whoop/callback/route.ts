@@ -1,10 +1,14 @@
+// Env vars used: NEXT_PUBLIC_WHOOP_CLIENT_ID, WHOOP_CLIENT_SECRET, NEXT_PUBLIC_APP_URL
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
+import { checkRateLimit } from '@/lib/ratelimit'
 
 const WHOOP_TOKEN_URL = 'https://api.prod.whoop.com/oauth/oauth2/token'
 
 export async function GET(request: NextRequest) {
+  const { success, response } = checkRateLimit(request, 'whoop:callback')
+  if (!success) return response!
   const { searchParams } = new URL(request.url)
   const code = searchParams.get('code')
   const state = searchParams.get('state')
@@ -30,7 +34,7 @@ export async function GET(request: NextRequest) {
     body: new URLSearchParams({
       grant_type: 'authorization_code',
       code,
-      redirect_uri: 'http://localhost:3000/api/whoop/callback',
+      redirect_uri: `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/api/whoop/callback`,
       client_id: process.env.NEXT_PUBLIC_WHOOP_CLIENT_ID!,
       client_secret: process.env.WHOOP_CLIENT_SECRET!,
     }),

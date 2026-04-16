@@ -1,10 +1,14 @@
-import { NextResponse } from 'next/server'
+// Env vars used: ANTHROPIC_API_KEY (via generateWeeklyInsights)
+import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { generateWeeklyInsights } from '@/lib/ai/insights'
+import { checkRateLimit } from '@/lib/ratelimit'
 
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000 // 6 hours
 
-export async function POST() {
+export async function POST(request: NextRequest) {
+  const { success, response } = checkRateLimit(request, 'insights:generate')
+  if (!success) return response!
   const supabase = await createClient()
   const {
     data: { user },

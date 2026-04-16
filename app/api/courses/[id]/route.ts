@@ -1,3 +1,4 @@
+// Env vars used: GOLF_COURSE_API_KEY (server-side only)
 import { type NextRequest } from 'next/server'
 
 export async function GET(
@@ -5,7 +6,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const apiKey = process.env.NEXT_PUBLIC_GOLF_COURSE_API_KEY
+  const apiKey = process.env.GOLF_COURSE_API_KEY
 
   const res = await fetch(`https://api.golfcourseapi.com/v1/courses/${id}`, {
     headers: { Authorization: `Key ${apiKey}` },
