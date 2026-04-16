@@ -197,7 +197,7 @@ export default function CourseSearchPage() {
               value={query}
               onChange={(e) => handleQueryChange(e.target.value)}
               placeholder="Search golf courses…"
-              className="w-full rounded-2xl border border-[#2a3d2c] bg-[#1a2e1d] pl-10 pr-4 py-3.5 text-sm text-gray-900 placeholder-gray-400 shadow-sm focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-[#4ade80]/30"
+              className="w-full rounded-2xl border border-[#2a3d2c] bg-[#1a2e1d] pl-10 pr-4 py-3.5 text-sm text-white placeholder-gray-400 shadow-sm focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-[#4ade80]/30"
             />
             {searching && (
               <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -245,7 +245,7 @@ export default function CourseSearchPage() {
         <div className="flex-1 mx-auto w-full max-w-lg px-4 pt-5 space-y-5 pb-8">
           {/* Selected course */}
           <div className="rounded-2xl bg-[#1a2e1d] border border-[#2a3d2c] px-4 py-3.5">
-            <p className="font-semibold text-gray-900">{selectedCourse.club_name}</p>
+            <p className="font-semibold text-white">{selectedCourse.club_name}</p>
             {selectedCourse.location && (
               <p className="text-xs text-gray-400 mt-0.5">
                 {[selectedCourse.location.city, selectedCourse.location.state]

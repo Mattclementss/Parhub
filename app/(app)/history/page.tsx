@@ -9,10 +9,10 @@ function relDisplay(rel: number): string {
   return rel > 0 ? `+${rel}` : `${rel}`
 }
 
-function recoveryBadgeStyles(score: number): { bg: string; text: string; border: string } {
-  if (score >= 67) return { bg: 'bg-[#4ade80]/10', text: 'text-[#4ade80]', border: 'border-[#4ade80]/20' }
-  if (score >= 34) return { bg: 'bg-yellow-400/10', text: 'text-yellow-400', border: 'border-yellow-400/20' }
-  return { bg: 'bg-red-400/10', text: 'text-red-400', border: 'border-red-400/20' }
+function recoveryCircleStyle(score: number): { bg: string; text: string } {
+  if (score >= 67) return { bg: 'bg-[#4ade80]', text: 'text-black' }
+  if (score >= 34) return { bg: 'bg-[#fbbf24]', text: 'text-black' }
+  return { bg: 'bg-[#f87171]', text: 'text-black' }
 }
 
 export default async function HistoryPage() {
@@ -104,33 +104,25 @@ export default async function HistoryPage() {
                     : scoreVsPar > 0
                     ? 'text-red-400'
                     : 'text-gray-400'
-                const badge =
-                  round.whoop_recovery !== null
-                    ? recoveryBadgeStyles(round.whoop_recovery)
-                    : null
-
                 return (
                   <Link
                     key={round.id}
                     href={`/history/${round.id}`}
                     className="flex items-center gap-3 px-4 py-3.5 hover:bg-[#1e3220] active:bg-[#223527] transition-colors"
                   >
-                    {/* Recovery badge */}
-                    {badge ? (
-                      <div
-                        className={`rounded-xl border ${badge.bg} ${badge.border} px-2 py-2 text-center shrink-0 min-w-[2.75rem]`}
-                      >
-                        <p className={`text-[11px] font-black leading-none ${badge.text}`}>
-                          {Math.round(round.whoop_recovery!)}%
-                        </p>
-                        <p className={`text-[8px] font-semibold mt-0.5 opacity-70 ${badge.text}`}>
-                          REC
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="rounded-xl border border-[#2a3d2c] bg-[#1e3220] px-2 py-2 text-center shrink-0 min-w-[2.75rem]">
-                        <p className="text-[11px] font-black leading-none text-gray-600">—</p>
-                        <p className="text-[8px] font-semibold mt-0.5 text-gray-700">REC</p>
+                    {/* Recovery circle */}
+                    {round.whoop_recovery !== null ? (() => {
+                      const c = recoveryCircleStyle(round.whoop_recovery)
+                      return (
+                        <div className={`w-11 h-11 rounded-full flex items-center justify-center shrink-0 ${c.bg}`}>
+                          <p className={`text-sm font-black leading-none ${c.text}`}>
+                            {Math.round(round.whoop_recovery)}
+                          </p>
+                        </div>
+                      )
+                    })() : (
+                      <div className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 bg-[#1a2e1d] border border-[#2a3d2c]">
+                        <p className="text-sm font-black leading-none text-[#555]">—</p>
                       </div>
                     )}
 

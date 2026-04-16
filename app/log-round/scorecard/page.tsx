@@ -185,10 +185,10 @@ export default function ScorecardPage() {
   const recoveryBadge =
     todayRecovery !== null
       ? todayRecovery >= 67
-        ? { label: `${Math.round(todayRecovery)}% GREEN`, color: 'text-[#4ade80] bg-[#4ade80]/10 border-[#4ade80]/20' }
+        ? { dot: 'bg-[#4ade80]', label: `${Math.round(todayRecovery)}% GREEN`, color: 'text-[#4ade80] bg-[#4ade80]/10 border border-[#4ade80]/20' }
         : todayRecovery >= 34
-        ? { label: `${Math.round(todayRecovery)}% YELLOW`, color: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20' }
-        : { label: `${Math.round(todayRecovery)}% RED`, color: 'text-red-400 bg-red-400/10 border-red-400/20' }
+        ? { dot: 'bg-[#fbbf24]', label: `${Math.round(todayRecovery)}% YELLOW`, color: 'text-[#fbbf24] bg-[#fbbf24]/10 border border-[#fbbf24]/20' }
+        : { dot: 'bg-[#f87171]', label: `${Math.round(todayRecovery)}% RED`, color: 'text-[#f87171] bg-[#f87171]/10 border border-[#f87171]/20' }
       : null
 
   function updateHole(updates: Partial<HoleScore>) {
@@ -231,7 +231,8 @@ export default function ScorecardPage() {
           </div>
 
           {recoveryBadge ? (
-            <span className={`text-[10px] font-bold rounded-full border px-2 py-0.5 ${recoveryBadge.color}`}>
+            <span className={`flex items-center gap-1 text-[10px] font-bold rounded-full px-2 py-0.5 ${recoveryBadge.color}`}>
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${recoveryBadge.dot}`} />
               {recoveryBadge.label}
             </span>
           ) : (
@@ -267,7 +268,7 @@ export default function ScorecardPage() {
       </div>
 
       {/* ── Hole tabs ── */}
-      <div className="bg-[#0d1a0f] px-2 py-2 border-b border-[#1a2e1d]">
+      <div className="bg-[#0d1a0f] px-2 py-2.5 border-b border-[#1a2e1d]">
         <div
           ref={tabsRef}
           className="mx-auto max-w-lg flex gap-1.5 overflow-x-auto scrollbar-none px-2"
@@ -275,19 +276,22 @@ export default function ScorecardPage() {
         >
           {round.holes.map((h, i) => {
             const isActive = i === currentHole
-            const chipStyle = h.score !== null ? miniChipStyle(h.score, h.par) : ''
+            const scored = h.score !== null
+            const chip = scored ? miniChipStyle(h.score!, h.par) : ''
 
             return (
               <button
                 key={h.hole}
                 onClick={() => setCurrentHole(i)}
-                className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                className={`shrink-0 min-w-[2rem] h-8 rounded-lg px-1.5 flex items-center justify-center text-xs font-bold transition-all ${
                   isActive
-                    ? 'ring-2 ring-[#4ade80] ring-offset-1 ring-offset-[#0d1a0f]'
-                    : ''
-                } ${h.score !== null ? chipStyle : 'bg-[#1a2e1d] text-gray-600'}`}
+                    ? 'bg-white text-black'
+                    : scored
+                    ? chip
+                    : 'bg-[#1a2e1d] text-[#555]'
+                }`}
               >
-                {h.score !== null ? h.score : h.hole}
+                {scored ? h.score : h.hole}
               </button>
             )
           })}
@@ -298,41 +302,45 @@ export default function ScorecardPage() {
         {/* ── Hole info ── */}
         <div className="px-4 pt-4 pb-3 flex items-center justify-between">
           <div>
-            <div className="flex items-center gap-2">
-              <span className={`text-[10px] font-bold uppercase tracking-[0.1em] ${isBack9 ? 'text-blue-400' : 'text-gray-500'}`}>
-                {isBack9 ? 'BACK 9' : 'FRONT 9'}
-              </span>
-            </div>
+            <p className="text-[10px] font-semibold uppercase tracking-[1.5px] text-[#555]">
+              Hole {hole.hole}
+            </p>
             <p className="text-3xl font-black text-white leading-none mt-0.5">
               Par {hole.par}
               {hole.yardage > 0 && (
-                <span className="text-lg font-bold text-gray-500 ml-2">{hole.yardage} yds</span>
+                <span className="text-lg font-bold text-[#555] ml-2">{hole.yardage} yds</span>
               )}
             </p>
-            <p className="text-gray-500 text-sm mt-0.5">Hole {hole.hole}</p>
           </div>
+          <span className={`text-[10px] font-bold uppercase tracking-[1.5px] rounded-full px-3 py-1 border ${
+            isBack9
+              ? 'text-blue-400 border-blue-400/30 bg-blue-400/10'
+              : 'text-[#555] border-[#2a3d2c] bg-[#111f13]'
+          }`}>
+            {isBack9 ? 'Back' : 'Front'}
+          </span>
         </div>
 
         {/* ── Score input ── */}
         <div className="px-4 pb-4">
           <div className="flex items-center justify-between gap-3">
-            {/* Minus 2 */}
-            <button
-              onClick={() => updateHole({ score: Math.max((hole.score ?? hole.par) - 2, 1) })}
-              className="w-14 h-14 rounded-full bg-[#1a2e1d] border border-[#2a3d2c] flex items-center justify-center text-white font-bold text-sm hover:bg-[#1e3220] active:scale-95 transition-all"
-            >
-              −2
-            </button>
+            {/* Left: −2 and −1 */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => updateHole({ score: Math.max((hole.score ?? hole.par) - 2, 1) })}
+                className="w-14 h-14 rounded-full bg-[#1a2e1d] border border-[#2a3d2c] flex items-center justify-center text-white font-bold text-sm hover:bg-[#1e3220] active:scale-95 transition-all"
+              >
+                −2
+              </button>
+              <button
+                onClick={() => updateHole({ score: Math.max((hole.score ?? hole.par) - 1, 1) })}
+                className="w-14 h-14 rounded-full bg-[#1a2e1d] border border-[#2a3d2c] flex items-center justify-center text-white font-bold text-xl hover:bg-[#1e3220] active:scale-95 transition-all"
+              >
+                −
+              </button>
+            </div>
 
-            {/* Minus 1 */}
-            <button
-              onClick={() => updateHole({ score: Math.max((hole.score ?? hole.par) - 1, 1) })}
-              className="w-16 h-16 rounded-full bg-[#1a2e1d] border border-[#2a3d2c] flex items-center justify-center text-white font-bold text-xl hover:bg-[#1e3220] active:scale-95 transition-all"
-            >
-              −
-            </button>
-
-            {/* Score display */}
+            {/* Center: score display */}
             <div className="flex flex-col items-center gap-1.5">
               <div
                 className="w-[88px] h-[88px] rounded-full flex items-center justify-center text-5xl font-black text-white border-4 transition-all"
@@ -345,16 +353,13 @@ export default function ScorecardPage() {
               )}
             </div>
 
-            {/* Plus 1 */}
+            {/* Right: +1 */}
             <button
               onClick={() => updateHole({ score: Math.min((hole.score ?? hole.par) + 1, hole.par + 8) })}
-              className="w-16 h-16 rounded-full bg-[#4ade80] flex items-center justify-center text-black font-bold text-xl hover:bg-[#22c55e] active:scale-95 transition-all"
+              className="w-14 h-14 rounded-full bg-[#4ade80] flex items-center justify-center text-black font-bold text-2xl hover:bg-[#22c55e] active:scale-95 transition-all"
             >
               +
             </button>
-
-            {/* Spacer to balance the −2 */}
-            <div className="w-14 h-14" />
           </div>
         </div>
 

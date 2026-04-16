@@ -87,7 +87,7 @@ export default function BottomNav({ pendingFriendRequests = 0 }: { pendingFriend
   }
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[#111f13] border-t border-[#2a3d2c] safe-area-inset-bottom">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[#111f13] border-t border-[#2a3d2c] nav-safe-pb">
       <div className="mx-auto max-w-lg flex items-end h-16">
         {leftItems.map((item) => <NavTab key={item.href} item={item} />)}
 

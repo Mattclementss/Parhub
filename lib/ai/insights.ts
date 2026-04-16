@@ -2,6 +2,50 @@ import 'server-only'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
 
+// ─── Daily cache ──────────────────────────────────────────────────────────────
+
+export async function getOrGenerateDailyInsight(userId: string): Promise<WeeklyInsights | null> {
+  try {
+    const supabase = await createClient()
+    const todayStr = new Date().toISOString().split('T')[0]
+
+    // Check cache
+    const { data: cached } = await supabase
+      .from('insights_cache')
+      .select('weekly_summary, pre_round_prediction, pattern_alert, recommended_tee_time, generated_at')
+      .eq('user_id', userId)
+      .single()
+
+    if (cached && cached.generated_at.startsWith(todayStr)) {
+      return {
+        weeklySummary: cached.weekly_summary ?? '',
+        preRoundPrediction: cached.pre_round_prediction ?? '',
+        patternAlert: cached.pattern_alert ?? null,
+        recommendedTeeTime: cached.recommended_tee_time ?? null,
+      }
+    }
+
+    // Generate fresh
+    const fresh = await generateWeeklyInsights(userId)
+
+    await supabase.from('insights_cache').upsert(
+      {
+        user_id: userId,
+        weekly_summary: fresh.weeklySummary,
+        pre_round_prediction: fresh.preRoundPrediction,
+        pattern_alert: fresh.patternAlert,
+        recommended_tee_time: fresh.recommendedTeeTime,
+        generated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id' }
+    )
+
+    return fresh
+  } catch {
+    return null
+  }
+}
+
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 export interface WeeklyInsights {

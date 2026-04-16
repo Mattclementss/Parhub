@@ -18,7 +18,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="min-h-screen bg-[#0d1a0f] pb-24">
+    <div className="min-h-screen bg-[#0d1a0f] pb-nav">
       {children}
       <BottomNav pendingFriendRequests={pendingFriendRequests} />
     </div>
