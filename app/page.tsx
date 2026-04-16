@@ -1,298 +1,372 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { signOut } from '@/app/actions/auth'
-import BottomNav from '@/app/components/BottomNav'
 import { getWhoopData } from '@/lib/whoop/client'
+import BottomNav from '@/app/components/BottomNav'
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function greeting() {
   const hour = new Date().getHours()
-  if (hour < 12) return 'Good morning'
-  if (hour < 17) return 'Good afternoon'
-  return 'Good evening'
+  if (hour < 12) return 'Good morning,'
+  if (hour < 17) return 'Good afternoon,'
+  return 'Good evening,'
 }
+
+function recoveryZone(score: number | null): 'green' | 'yellow' | 'red' | null {
+  if (score === null) return null
+  if (score >= 67) return 'green'
+  if (score >= 34) return 'yellow'
+  return 'red'
+}
+
+const ZONE_COLORS = {
+  green:  { stroke: '#4ade80', text: 'text-[#4ade80]',  bg: 'bg-[#1a3d1a]', border: 'border-[#2a5a2a]', label: 'GREEN'  },
+  yellow: { stroke: '#fbbf24', text: 'text-[#fbbf24]',  bg: 'bg-[#3d3010]', border: 'border-[#5a4a20]', label: 'YELLOW' },
+  red:    { stroke: '#f87171', text: 'text-[#f87171]',  bg: 'bg-[#3d1010]', border: 'border-[#5a2020]', label: 'RED'    },
+}
+
+function friendRecoveryBadge(score: number): string {
+  if (score >= 67) return 'bg-[#1a3d1a] text-[#4ade80]'
+  if (score >= 34) return 'bg-[#3d3010] text-[#fbbf24]'
+  return 'bg-[#3d1010] text-[#f87171]'
+}
+
+// ─── SVG Recovery Circle (56px) ───────────────────────────────────────────────
+
+function RecoveryCircle({ score }: { score: number | null }) {
+  const r = 22
+  const circ = 2 * Math.PI * r
+  const zone = recoveryZone(score)
+  const strokeColor = zone ? ZONE_COLORS[zone].stroke : '#2a3d2c'
+  const bgStroke = '#1a3d1a'
+  const dash = score !== null ? (score / 100) * circ : 0
+
+  return (
+    <svg width="56" height="56" viewBox="0 0 56 56" className="shrink-0">
+      <circle cx="28" cy="28" r={r} fill="none" stroke={bgStroke} strokeWidth="4" />
+      {score !== null && (
+        <circle
+          cx="28" cy="28" r={r}
+          fill="none"
+          stroke={strokeColor}
+          strokeWidth="4"
+          strokeDasharray={`${dash} ${circ - dash}`}
+          strokeLinecap="round"
+          transform="rotate(-90 28 28)"
+        />
+      )}
+      <text x="28" y="25" textAnchor="middle" fontSize="10" fontWeight="900" fill="white">
+        {score !== null ? `${Math.round(score)}%` : '—'}
+      </text>
+      <text x="28" y="35" textAnchor="middle" fontSize="6" fontWeight="700"
+        fill={strokeColor} letterSpacing="1">
+        {zone ? ZONE_COLORS[zone].label : 'NO DATA'}
+      </text>
+    </svg>
+  )
+}
+
+// ─── Weekly Bar Chart ─────────────────────────────────────────────────────────
+
+function WeeklyBars({
+  weekData,
+}: {
+  weekData: Array<{ day: string; recovery: number | null; isToday: boolean }>
+}) {
+  const MAX_H = 36
+
+  return (
+    <div className="flex items-end gap-1.5">
+      {weekData.map(({ day, recovery, isToday }) => {
+        const zone = recoveryZone(recovery)
+        const barColor = zone ? ZONE_COLORS[zone].stroke : '#2a3d2c'
+        const height = recovery !== null ? Math.max(5, (recovery / 100) * MAX_H) : 5
+
+        return (
+          <div key={day + isToday} className="flex-1 flex flex-col items-center gap-1.5">
+            <div style={{ height: MAX_H }} className="flex items-end w-full">
+              <div
+                style={{ height: `${height}px`, backgroundColor: barColor }}
+                className="w-full rounded-sm transition-all"
+              />
+            </div>
+            <span className={`text-[9px] font-semibold ${isToday ? 'text-[#4ade80]' : 'text-[#555]'}`}>
+              {day}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function HomePage() {
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
-
   if (!user) redirect('/signin')
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('full_name')
-    .eq('id', user.id)
-    .single()
+  const today = new Date()
+  const dayOfWeek = today.getDay()
+  const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1
+  const monday = new Date(today)
+  monday.setDate(today.getDate() - daysFromMonday)
+  monday.setHours(0, 0, 0, 0)
+  const todayStr = today.toISOString().split('T')[0]
 
-  const { data: rounds } = await supabase
-    .from('rounds')
-    .select('id, course_name, date_played, total_score, gir, total_putts, fairways_hit, fairways_possible')
-    .eq('user_id', user.id)
-    .order('date_played', { ascending: false })
-    .limit(5)
+  const [
+    { data: rounds },
+    { count: pendingCount },
+    { data: whoopToken },
+    { data: friendships },
+  ] = await Promise.all([
+    supabase
+      .from('rounds')
+      .select('id, course_name, date_played, total_score, gir, total_putts, fairways_hit, fairways_possible, whoop_recovery')
+      .eq('user_id', user.id)
+      .order('date_played', { ascending: false })
+      .limit(30),
+    supabase
+      .from('friend_requests')
+      .select('*', { count: 'exact', head: true })
+      .eq('receiver_id', user.id)
+      .eq('status', 'pending'),
+    supabase.from('whoop_tokens').select('user_id').eq('user_id', user.id).single(),
+    supabase.from('friendships').select('friend_id').eq('user_id', user.id),
+  ])
 
-  const displayName =
-    profile?.full_name?.split(' ')[0] ?? user.email?.split('@')[0] ?? 'Golfer'
+  const allRounds = rounds ?? []
+  const lastRound = allRounds[0] ?? null
+  const pendingFriendRequests = pendingCount ?? 0
+  const friendIds = (friendships ?? []).map((f) => f.friend_id)
 
-  const lastRound = rounds?.[0] ?? null
-  const recentRounds = rounds?.slice(1) ?? []
-
-  // Check if user has WHOOP connected before fetching (avoid unnecessary auth errors)
-  const { data: whoopToken } = await supabase
-    .from('whoop_tokens')
-    .select('user_id')
-    .eq('user_id', user.id)
-    .single()
-
+  // WHOOP
   const whoopData = whoopToken ? await getWhoopData(user.id).catch(() => null) : null
 
+  // Weekly chart — built from WHOOP API data (weeklyRecovery), not Supabase rounds
+  const DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
+  const weekData = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(monday)
+    d.setDate(monday.getDate() + i)
+    const dateStr = d.toISOString().split('T')[0]
+    const record = whoopData?.weeklyRecovery.find((r) => r.date === dateStr)
+    return {
+      day: DAY_LABELS[i],
+      recovery: record?.score ?? null,
+      isToday: dateStr === todayStr,
+    }
+  })
+
+  // Pattern: green vs red recovery
+  const greenRounds = allRounds.filter((r) => r.whoop_recovery !== null && r.whoop_recovery >= 67 && r.total_score !== null)
+  const redRounds = allRounds.filter((r) => r.whoop_recovery !== null && r.whoop_recovery < 34 && r.total_score !== null)
+  const greenAvg = greenRounds.length >= 2 ? greenRounds.reduce((s, r) => s + r.total_score, 0) / greenRounds.length : null
+  const redAvg = redRounds.length >= 2 ? redRounds.reduce((s, r) => s + r.total_score, 0) / redRounds.length : null
+  const patternShots = greenAvg !== null && redAvg !== null ? Math.round(redAvg - greenAvg) : null
+
+  // Friends today (phase 2)
+  type FriendToday = { name: string; score: number | null; recovery: number | null }
+  let friendsToday: FriendToday[] = []
+  if (friendIds.length > 0) {
+    const [{ data: friendProfiles }, { data: todayRounds }] = await Promise.all([
+      supabase.from('profiles').select('id, full_name, email').in('id', friendIds),
+      supabase
+        .from('rounds')
+        .select('user_id, total_score, whoop_recovery')
+        .in('user_id', friendIds)
+        .eq('date_played', todayStr),
+    ])
+    const profileMap = Object.fromEntries((friendProfiles ?? []).map((p) => [p.id, p]))
+    friendsToday = (todayRounds ?? []).map((r) => ({
+      name: profileMap[r.user_id]?.full_name ?? profileMap[r.user_id]?.email ?? 'Friend',
+      score: r.total_score,
+      recovery: r.whoop_recovery,
+    }))
+  }
+
+  const dateStr = today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+
   return (
-    <div className="min-h-screen bg-gray-50 pb-24">
+    <div className="min-h-screen bg-[#0d1a0f] pb-28">
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-green-800 px-4">
-        <div className="mx-auto max-w-lg flex items-center justify-between h-14">
-          <div className="flex items-center gap-2">
-            <span className="text-xl">⛳</span>
-            <span className="text-lg font-bold tracking-tight text-white">ParHub</span>
-          </div>
-          <form action={signOut}>
-            <button
-              type="submit"
-              className="text-sm font-medium text-green-200 hover:text-white transition-colors"
-            >
-              Sign out
-            </button>
-          </form>
+      <header className="px-5 pt-14 pb-2">
+        <div className="mx-auto max-w-lg">
+          <p className="text-[11px] font-semibold uppercase tracking-[1.5px] text-[#555] mb-0.5">
+            {dateStr}
+          </p>
+          <h1 className="text-2xl font-black text-white leading-tight">
+            {greeting()}<br />
+            <em className="not-italic text-[#4ade80]">ready to play.</em>
+          </h1>
         </div>
       </header>
 
-      <main className="mx-auto max-w-lg px-4 pt-6 space-y-5">
-        {/* Welcome */}
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">
-            {greeting()}, {displayName}
-          </h2>
-          <p className="mt-0.5 text-sm text-gray-500">Ready to hit the course?</p>
-        </div>
+      <main className="mx-auto max-w-lg px-4 pt-4 space-y-4">
 
-        {/* Log Round CTA */}
-        <Link
-          href="/log-round"
-          className="flex items-center justify-center gap-3 w-full rounded-2xl bg-green-700 px-6 py-4 text-base font-bold text-white shadow-md shadow-green-700/25 hover:bg-green-800 active:scale-[0.98] transition-all"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2.5}
-            className="w-5 h-5 shrink-0"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-          </svg>
-          Log a Round
-        </Link>
-
-        {/* WHOOP Today */}
+        {/* WHOOP Recovery */}
         {whoopToken ? (
-          <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2 px-1">
-              Today&apos;s Recovery
-            </h3>
-            {whoopData ? (
-              <div className="rounded-2xl bg-white border border-gray-200 overflow-hidden">
-                <div className="grid grid-cols-3 divide-x divide-gray-100">
-                  <WhoopCell
-                    label="Recovery"
-                    value={whoopData.recoveryScore !== null ? `${whoopData.recoveryScore}%` : '—'}
-                    color={recoveryColor(whoopData.recoveryScore)}
-                  />
-                  <WhoopCell
-                    label="HRV"
-                    value={whoopData.hrv !== null ? `${whoopData.hrv}ms` : '—'}
-                  />
-                  <WhoopCell
-                    label="Sleep"
-                    value={whoopData.sleepHours !== null ? `${whoopData.sleepHours}h` : '—'}
-                  />
-                </div>
-                {whoopData.sleepPerformance !== null && (
-                  <div className="px-4 py-2 border-t border-gray-100 flex items-center justify-between">
-                    <span className="text-xs text-gray-400">Sleep performance</span>
-                    <span className="text-xs font-semibold text-gray-700">
-                      {whoopData.sleepPerformance}%
-                    </span>
+          <>
+            {/* Recovery circle + biometrics */}
+            <section className="rounded-2xl bg-[#1a2e1d] border border-[#2a3d2c] p-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[1.5px] text-[#555] mb-3">
+                Today&apos;s Recovery
+              </p>
+              <div className="flex items-center gap-3">
+                <RecoveryCircle score={whoopData?.recoveryScore ?? null} />
+                <div className="flex-1 flex gap-2">
+                  <div className="flex-1 rounded-lg bg-[#111f13] border border-[#2a3d2c] px-2.5 py-2">
+                    <p className="text-[9px] font-semibold uppercase tracking-[1.5px] text-[#555]">HRV</p>
+                    <p className="text-base font-black text-white leading-none mt-0.5">
+                      {whoopData?.hrv != null ? `${whoopData.hrv}ms` : '—'}
+                    </p>
                   </div>
-                )}
+                  <div className="flex-1 rounded-lg bg-[#111f13] border border-[#2a3d2c] px-2.5 py-2">
+                    <p className="text-[9px] font-semibold uppercase tracking-[1.5px] text-[#555]">Sleep</p>
+                    <p className="text-base font-black text-white leading-none mt-0.5">
+                      {whoopData?.sleepHours != null ? `${whoopData.sleepHours}h` : '—'}
+                    </p>
+                  </div>
+                </div>
               </div>
-            ) : (
-              <div className="rounded-2xl bg-white border border-gray-200 px-4 py-4 text-center">
-                <p className="text-sm text-gray-400">No recovery data yet today</p>
-              </div>
+            </section>
+
+            {/* YOUR PATTERN */}
+            {patternShots !== null && patternShots !== 0 && (
+              <section className="rounded-2xl bg-[#1a2e1d] border border-[#2a3d2c] p-4 flex items-center gap-3">
+                <span className="text-2xl shrink-0">🧠</span>
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[1.5px] text-[#555] mb-1">
+                    Your Pattern
+                  </p>
+                  <p className="text-sm font-bold text-white leading-snug">
+                    You score{' '}
+                    <span className="text-[#4ade80]">
+                      {patternShots} shot{patternShots !== 1 ? 's' : ''} better
+                    </span>{' '}
+                    on green recovery days
+                  </p>
+                </div>
+              </section>
             )}
-          </section>
+
+            {/* THIS WEEK */}
+            <section className="rounded-2xl bg-[#1a2e1d] border border-[#2a3d2c] p-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[1.5px] text-[#555] mb-4">
+                This Week
+              </p>
+              <WeeklyBars weekData={weekData} />
+            </section>
+          </>
         ) : (
+          /* Connect WHOOP banner */
           <Link
             href="/api/whoop/connect"
-            className="flex items-center justify-between gap-3 w-full rounded-2xl bg-white border border-gray-200 px-4 py-3.5 hover:bg-gray-50 transition-colors"
+            className="flex items-center justify-between gap-3 w-full rounded-2xl bg-[#1a2e1d] border border-[#2a3d2c] px-4 py-3.5 hover:bg-[#1e3220] transition-colors"
           >
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-black flex items-center justify-center shrink-0">
-                <span className="text-white text-xs font-bold">W</span>
+              <div className="w-9 h-9 rounded-xl bg-[#111f13] border border-[#2a3d2c] flex items-center justify-center shrink-0">
+                <span className="text-white text-sm font-black">W</span>
               </div>
-              <div className="text-left">
-                <p className="text-sm font-semibold text-gray-900">Connect WHOOP</p>
-                <p className="text-xs text-gray-400">See recovery &amp; sleep on your dashboard</p>
+              <div>
+                <p className="text-sm font-bold text-white">Connect WHOOP</p>
+                <p className="text-xs text-[#555] mt-0.5">See recovery &amp; sleep data</p>
               </div>
             </div>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4 text-gray-400 shrink-0">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4 text-[#555] shrink-0">
               <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
             </svg>
           </Link>
         )}
 
-        {/* Last Round */}
-        <section>
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2 px-1">
-            Last Round
-          </h3>
+        {/* Last Round + Log Round */}
+        <div className="flex gap-3">
+          {/* LAST ROUND */}
           {lastRound ? (
-            <div className="rounded-2xl bg-white border border-gray-200 overflow-hidden">
-              <div className="px-4 pt-4 pb-3 border-b border-gray-100">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="font-semibold text-gray-900 truncate">{lastRound.course_name}</p>
-                    <p className="text-sm text-gray-400 mt-0.5">
-                      {new Date(lastRound.date_played).toLocaleDateString('en-US', {
-                        weekday: 'short',
-                        month: 'short',
-                        day: 'numeric',
-                      })}
+            <Link
+              href={`/history/${lastRound.id}`}
+              className="flex-1 rounded-2xl bg-[#1a2e1d] border border-[#2a3d2c] p-4 flex flex-col hover:bg-[#1e3220] transition-colors"
+            >
+              <p className="text-[10px] font-semibold uppercase tracking-[1.5px] text-[#555] mb-2">
+                Last Round
+              </p>
+              {lastRound.total_score !== null ? (
+                <p className="text-4xl font-black text-[#4ade80] leading-none mb-1">
+                  {lastRound.total_score}
+                </p>
+              ) : (
+                <p className="text-4xl font-black text-[#555] leading-none mb-1">—</p>
+              )}
+              <p className="text-xs text-[#999] font-medium truncate">{lastRound.course_name}</p>
+              <p className="text-[10px] text-[#555] mt-0.5">
+                {new Date(lastRound.date_played).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                })}
+              </p>
+            </Link>
+          ) : (
+            <div className="flex-1 rounded-2xl bg-[#1a2e1d] border border-[#2a3d2c] p-4 flex flex-col">
+              <p className="text-[10px] font-semibold uppercase tracking-[1.5px] text-[#555] mb-2">
+                Last Round
+              </p>
+              <p className="text-4xl font-black text-[#555] leading-none mb-1">—</p>
+              <p className="text-xs text-[#555] mt-0.5">No rounds yet</p>
+            </div>
+          )}
+
+          {/* LOG ROUND */}
+          <Link
+            href="/log-round"
+            className="w-20 rounded-2xl bg-[#4ade80] flex flex-col items-center justify-center gap-2 hover:bg-[#22c55e] active:scale-[0.97] transition-all"
+          >
+            <div className="w-8 h-8 rounded-full bg-black/15 flex items-center justify-center">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-5 h-5 text-black">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+            </div>
+            <span className="text-xs font-black text-black text-center leading-tight">Log<br/>Round</span>
+          </Link>
+        </div>
+
+        {/* FRIENDS TODAY */}
+        {friendIds.length > 0 && (
+          <section className="rounded-2xl bg-[#1a2e1d] border border-[#2a3d2c] p-4">
+            <p className="text-[10px] font-semibold uppercase tracking-[1.5px] text-[#555] mb-3">
+              Friends Today
+            </p>
+            {friendsToday.length === 0 ? (
+              <p className="text-sm text-[#555]">None out on the course today.</p>
+            ) : (
+              <div className="space-y-3">
+                {friendsToday.map((f, i) => (
+                  <div key={i} className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-bold text-white truncate">
+                      {f.name.split(' ')[0]}
                     </p>
-                  </div>
-                  {lastRound.total_score !== null && (
-                    <div className="text-right shrink-0">
-                      <p className="text-3xl font-bold text-green-700 leading-none">
-                        {lastRound.total_score}
-                      </p>
-                      <p className="text-xs text-gray-400 mt-1">score</p>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {f.recovery !== null && (
+                        <span className={`text-[10px] font-bold rounded-lg px-2 py-0.5 ${friendRecoveryBadge(f.recovery)}`}>
+                          {Math.round(f.recovery)}%
+                        </span>
+                      )}
+                      {f.score !== null && (
+                        <p className="text-xl font-black text-white leading-none">{f.score}</p>
+                      )}
                     </div>
-                  )}
-                </div>
-              </div>
-              <div className="grid grid-cols-3 divide-x divide-gray-100">
-                <StatCell label="Putts" value={lastRound.total_putts ?? '—'} />
-                <StatCell
-                  label="GIR"
-                  value={lastRound.gir !== null ? `${lastRound.gir}/18` : '—'}
-                />
-                <StatCell
-                  label="FIR"
-                  value={
-                    lastRound.fairways_hit !== null && lastRound.fairways_possible
-                      ? `${lastRound.fairways_hit}/${lastRound.fairways_possible}`
-                      : '—'
-                  }
-                />
-              </div>
-            </div>
-          ) : (
-            <EmptyCard
-              icon="🏌️"
-              message="No rounds logged yet"
-              sub="Log your first round to see your stats here."
-            />
-          )}
-        </section>
-
-        {/* Recent Rounds */}
-        <section>
-          <div className="flex items-center justify-between mb-2 px-1">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400">
-              Recent Rounds
-            </h3>
-            {recentRounds.length > 0 && (
-              <Link
-                href="/history"
-                className="text-xs font-medium text-green-700 hover:text-green-800"
-              >
-                See all
-              </Link>
-            )}
-          </div>
-
-          {recentRounds.length > 0 ? (
-            <div className="rounded-2xl bg-white border border-gray-200 overflow-hidden divide-y divide-gray-100">
-              {recentRounds.map((round) => (
-                <div key={round.id} className="flex items-center justify-between px-4 py-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">
-                      {round.course_name}
-                    </p>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {new Date(round.date_played).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric',
-                      })}
-                    </p>
                   </div>
-                  {round.total_score !== null && (
-                    <span className="text-lg font-bold text-green-700 shrink-0 ml-3">
-                      {round.total_score}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <EmptyCard
-              icon="📋"
-              message="No recent rounds"
-              sub="Your round history will appear here."
-            />
-          )}
-        </section>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
       </main>
 
-      <BottomNav />
-    </div>
-  )
-}
-
-function recoveryColor(score: number | null): string {
-  if (score === null) return 'text-gray-900'
-  if (score >= 67) return 'text-green-600'
-  if (score >= 34) return 'text-yellow-500'
-  return 'text-red-500'
-}
-
-function WhoopCell({ label, value, color }: { label: string; value: string; color?: string }) {
-  return (
-    <div className="flex flex-col items-center py-3">
-      <span className={`text-lg font-bold ${color ?? 'text-gray-900'}`}>{value}</span>
-      <span className="text-xs text-gray-400 mt-0.5">{label}</span>
-    </div>
-  )
-}
-
-function StatCell({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="flex flex-col items-center py-3">
-      <span className="text-lg font-bold text-gray-900">{value}</span>
-      <span className="text-xs text-gray-400 mt-0.5">{label}</span>
-    </div>
-  )
-}
-
-function EmptyCard({ icon, message, sub }: { icon: string; message: string; sub: string }) {
-  return (
-    <div className="rounded-2xl bg-white border border-gray-200 px-4 py-8 text-center">
-      <p className="text-3xl mb-2">{icon}</p>
-      <p className="text-sm font-medium text-gray-700">{message}</p>
-      <p className="text-xs text-gray-400 mt-1">{sub}</p>
+      <BottomNav pendingFriendRequests={pendingFriendRequests} />
     </div>
   )
 }

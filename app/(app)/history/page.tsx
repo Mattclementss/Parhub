@@ -2,24 +2,17 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 function relDisplay(rel: number): string {
   if (rel === 0) return 'E'
   return rel > 0 ? `+${rel}` : `${rel}`
 }
 
-function relColor(rel: number): string {
-  if (rel <= -2) return 'text-yellow-500'
-  if (rel === -1) return 'text-green-600'
-  if (rel === 0) return 'text-gray-500'
-  if (rel === 1) return 'text-orange-500'
-  return 'text-red-500'
-}
-
-function recoveryColor(score: number | null): string {
-  if (score === null) return 'text-gray-400'
-  if (score >= 67) return 'text-green-600'
-  if (score >= 34) return 'text-yellow-500'
-  return 'text-red-500'
+function recoveryBadgeStyles(score: number): { bg: string; text: string; border: string } {
+  if (score >= 67) return { bg: 'bg-[#4ade80]/10', text: 'text-[#4ade80]', border: 'border-[#4ade80]/20' }
+  if (score >= 34) return { bg: 'bg-yellow-400/10', text: 'text-yellow-400', border: 'border-yellow-400/20' }
+  return { bg: 'bg-red-400/10', text: 'text-red-400', border: 'border-red-400/20' }
 }
 
 export default async function HistoryPage() {
@@ -27,10 +20,8 @@ export default async function HistoryPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser()
-
   if (!user) redirect('/signin')
 
-  // Fetch rounds with hole par values so we can compute score vs par
   const { data: rounds } = await supabase
     .from('rounds')
     .select(
@@ -40,85 +31,113 @@ export default async function HistoryPage() {
     .order('date_played', { ascending: false })
 
   const allRounds = rounds ?? []
-
-  // Season summary calculations
   const scoredRounds = allRounds.filter((r) => r.total_score !== null)
   const totalRounds = allRounds.length
   const scoringAvg =
     scoredRounds.length > 0
       ? Math.round(
-          (scoredRounds.reduce((sum, r) => sum + r.total_score, 0) / scoredRounds.length) * 10
+          (scoredRounds.reduce((s, r) => s + r.total_score, 0) / scoredRounds.length) * 10
         ) / 10
       : null
   const bestRound =
     scoredRounds.length > 0 ? Math.min(...scoredRounds.map((r) => r.total_score)) : null
-  const puttRounds = allRounds.filter((r) => r.total_putts !== null)
-  const avgPutts =
-    puttRounds.length > 0
-      ? Math.round(
-          (puttRounds.reduce((sum, r) => sum + r.total_putts, 0) / puttRounds.length) * 10
-        ) / 10
-      : null
 
   return (
     <>
-      <header className="sticky top-0 z-40 bg-green-800 px-4">
-        <div className="mx-auto max-w-lg flex items-center h-14">
-          <h1 className="text-lg font-bold text-white">History</h1>
+      {/* Header */}
+      <header className="sticky top-0 z-40 bg-[#0d1a0f] border-b border-[#2a3d2c] px-4">
+        <div className="mx-auto max-w-lg flex items-center justify-between h-14">
+          <h1 className="text-lg font-black text-white">Your History</h1>
+          <Link
+            href="/log-round"
+            className="flex items-center gap-1 rounded-full bg-[#4ade80] px-3 py-1.5 text-xs font-black text-black hover:bg-[#22c55e] transition-colors"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-3 h-3">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            NEW
+          </Link>
         </div>
       </header>
 
       <main className="mx-auto max-w-lg px-4 pt-5 pb-10 space-y-5">
-        {/* Season summary */}
-        <section>
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2 px-1">
-            Season Summary
-          </h3>
-          <div className="rounded-2xl bg-white border border-gray-200 overflow-hidden">
-            <div className="grid grid-cols-4 divide-x divide-gray-100">
-              <SummaryCell label="Rounds" value={totalRounds} />
-              <SummaryCell label="Avg Score" value={scoringAvg ?? '—'} />
-              <SummaryCell label="Best" value={bestRound ?? '—'} />
-              <SummaryCell label="Avg Putts" value={avgPutts ?? '—'} />
-            </div>
-          </div>
-        </section>
+        {/* Stats row */}
+        <div className="grid grid-cols-3 gap-3">
+          <StatCard label="Rounds" value={totalRounds} />
+          <StatCard label="Avg Score" value={scoringAvg ?? '—'} />
+          <StatCard label="Best" value={bestRound ?? '—'} />
+        </div>
 
         {/* Round list */}
         <section>
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2 px-1">
+          <h3 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500 mb-3 px-1">
             All Rounds
           </h3>
 
           {allRounds.length === 0 ? (
-            <div className="rounded-2xl bg-white border border-gray-200 px-4 py-12 text-center">
-              <p className="text-3xl mb-2">🏌️</p>
-              <p className="text-sm font-medium text-gray-700">No rounds logged yet</p>
-              <p className="text-xs text-gray-400 mt-1">
-                Log your first round to see your history here.
+            <div className="rounded-2xl bg-[#1a2e1d] border border-[#2a3d2c] px-4 py-12 text-center">
+              <p className="text-3xl mb-3">⛳</p>
+              <p className="text-sm font-bold text-white">No rounds logged yet</p>
+              <p className="text-xs text-gray-500 mt-1">
+                Log your first round to start your history.
               </p>
+              <Link
+                href="/log-round"
+                className="inline-block mt-4 rounded-full bg-[#4ade80] px-4 py-2 text-xs font-black text-black"
+              >
+                Log a Round
+              </Link>
             </div>
           ) : (
-            <div className="rounded-2xl bg-white border border-gray-200 overflow-hidden divide-y divide-gray-100">
+            <div className="rounded-2xl bg-[#1a2e1d] border border-[#2a3d2c] overflow-hidden divide-y divide-[#2a2a2a]">
               {allRounds.map((round) => {
                 const totalPar = Array.isArray(round.holes)
                   ? round.holes.reduce((sum: number, h: { par: number }) => sum + h.par, 0)
                   : null
                 const scoreVsPar =
                   round.total_score !== null && totalPar ? round.total_score - totalPar : null
+                const scoreColor =
+                  scoreVsPar === null
+                    ? 'text-white'
+                    : scoreVsPar < 0
+                    ? 'text-[#4ade80]'
+                    : scoreVsPar > 0
+                    ? 'text-red-400'
+                    : 'text-gray-400'
+                const badge =
+                  round.whoop_recovery !== null
+                    ? recoveryBadgeStyles(round.whoop_recovery)
+                    : null
 
                 return (
                   <Link
                     key={round.id}
                     href={`/history/${round.id}`}
-                    className="flex items-center justify-between px-4 py-3.5 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+                    className="flex items-center gap-3 px-4 py-3.5 hover:bg-[#1e3220] active:bg-[#223527] transition-colors"
                   >
-                    {/* Left: course + date + stats */}
+                    {/* Recovery badge */}
+                    {badge ? (
+                      <div
+                        className={`rounded-xl border ${badge.bg} ${badge.border} px-2 py-2 text-center shrink-0 min-w-[2.75rem]`}
+                      >
+                        <p className={`text-[11px] font-black leading-none ${badge.text}`}>
+                          {Math.round(round.whoop_recovery!)}%
+                        </p>
+                        <p className={`text-[8px] font-semibold mt-0.5 opacity-70 ${badge.text}`}>
+                          REC
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border border-[#2a3d2c] bg-[#1e3220] px-2 py-2 text-center shrink-0 min-w-[2.75rem]">
+                        <p className="text-[11px] font-black leading-none text-gray-600">—</p>
+                        <p className="text-[8px] font-semibold mt-0.5 text-gray-700">REC</p>
+                      </div>
+                    )}
+
+                    {/* Course info */}
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-gray-900 truncate">
-                        {round.course_name}
-                      </p>
-                      <p className="text-xs text-gray-400 mt-0.5">
+                      <p className="text-sm font-bold text-white truncate">{round.course_name}</p>
+                      <p className="text-[11px] text-gray-500 mt-0.5">
                         {new Date(round.date_played).toLocaleDateString('en-US', {
                           weekday: 'short',
                           month: 'short',
@@ -126,57 +145,45 @@ export default async function HistoryPage() {
                           year: 'numeric',
                         })}
                       </p>
-                      <div className="flex items-center gap-3 mt-1.5">
+                      <div className="flex items-center gap-3 mt-1">
                         {round.fairways_hit !== null && round.fairways_possible ? (
-                          <span className="text-[11px] text-gray-400">
-                            FIR {round.fairways_hit}/{round.fairways_possible}
+                          <span className="text-[10px] text-gray-600">
+                            FW {round.fairways_hit}/{round.fairways_possible}
                           </span>
                         ) : null}
                         {round.gir !== null ? (
-                          <span className="text-[11px] text-gray-400">GIR {round.gir}/18</span>
+                          <span className="text-[10px] text-gray-600">GIR {round.gir}/18</span>
                         ) : null}
                         {round.total_putts !== null ? (
-                          <span className="text-[11px] text-gray-400">
-                            {round.total_putts} putts
-                          </span>
+                          <span className="text-[10px] text-gray-600">{round.total_putts} putts</span>
                         ) : null}
                       </div>
                     </div>
 
-                    {/* Right: WHOOP recovery + score */}
-                    <div className="flex items-center gap-4 shrink-0 ml-3">
-                      {round.whoop_recovery !== null && (
-                        <div className="flex flex-col items-center">
-                          <span
-                            className={`text-xs font-bold ${recoveryColor(round.whoop_recovery)}`}
-                          >
-                            {Math.round(round.whoop_recovery)}%
-                          </span>
-                          <span className="text-[9px] text-gray-400 mt-0.5">recovery</span>
-                        </div>
-                      )}
-                      {round.total_score !== null && (
-                        <div className="flex flex-col items-center min-w-[2.5rem]">
-                          <span className="text-xl font-black text-gray-900 leading-none">
+                    {/* Score */}
+                    <div className="text-right shrink-0">
+                      {round.total_score !== null ? (
+                        <>
+                          <p className={`text-2xl font-black leading-none ${scoreColor}`}>
                             {round.total_score}
-                          </span>
+                          </p>
                           {scoreVsPar !== null && (
-                            <span className={`text-[11px] font-semibold mt-0.5 ${relColor(scoreVsPar)}`}>
+                            <p className={`text-[11px] font-bold mt-0.5 ${scoreColor}`}>
                               {relDisplay(scoreVsPar)}
-                            </span>
+                            </p>
                           )}
-                        </div>
+                        </>
+                      ) : (
+                        <p className="text-2xl font-black text-gray-600">—</p>
                       )}
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth={1.5}
-                        className="w-4 h-4 text-gray-300 shrink-0"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                      </svg>
                     </div>
+
+                    <svg
+                      viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}
+                      className="w-3.5 h-3.5 text-gray-700 shrink-0"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                    </svg>
                   </Link>
                 )
               })}
@@ -188,11 +195,15 @@ export default async function HistoryPage() {
   )
 }
 
-function SummaryCell({ label, value }: { label: string; value: string | number }) {
+// ─── Components ───────────────────────────────────────────────────────────────
+
+function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="flex flex-col items-center py-4">
-      <span className="text-lg font-black text-gray-900 leading-none">{value}</span>
-      <span className="text-[10px] text-gray-400 mt-1 text-center leading-tight">{label}</span>
+    <div className="rounded-2xl bg-[#1a2e1d] border border-[#2a3d2c] px-3 py-4 text-center">
+      <p className="text-2xl font-black text-white leading-none">{value}</p>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-gray-500 mt-1.5">
+        {label}
+      </p>
     </div>
   )
 }

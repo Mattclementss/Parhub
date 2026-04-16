@@ -12,6 +12,7 @@ interface HoleScore {
   putts: number | null
   fairwayHit: boolean | null
   gir: boolean | null
+  inSand: boolean | null
 }
 
 interface RoundState {
@@ -24,10 +25,6 @@ interface RoundState {
 
 // ─── Score helpers ──────────────────────────────────────────────────────────
 
-function relToPar(score: number | null, par: number): number | null {
-  return score !== null ? score - par : null
-}
-
 function scoreLabel(score: number | null, par: number): string {
   if (score === null) return ''
   const rel = score - par
@@ -36,30 +33,46 @@ function scoreLabel(score: number | null, par: number): string {
   if (rel === -1) return 'Birdie'
   if (rel === 0) return 'Par'
   if (rel === 1) return 'Bogey'
-  if (rel === 2) return 'Double Bogey'
-  if (rel === 3) return 'Triple Bogey'
+  if (rel === 2) return 'Double'
+  if (rel === 3) return 'Triple'
   return `+${rel}`
 }
 
-function scoreBg(score: number | null, par: number): string {
-  if (score === null) return 'bg-gray-100 text-gray-400'
+function scoreRingColor(score: number | null, par: number): string {
+  if (score === null) return '#2a3d2c'
   const rel = score - par
-  if (rel <= -2) return 'bg-yellow-400 text-yellow-900'
-  if (rel === -1) return 'bg-green-500 text-white'
-  if (rel === 0) return 'bg-white text-gray-900 border-2 border-gray-200'
-  if (rel === 1) return 'bg-orange-400 text-white'
+  if (rel <= -2) return '#eab308'  // eagle = gold
+  if (rel === -1) return '#4ade80'  // birdie = green
+  if (rel === 0) return '#4b5563'   // par = gray
+  if (rel === 1) return '#f97316'   // bogey = orange
+  return '#ef4444'                   // double+ = red
+}
+
+function scoreLabelColor(score: number | null, par: number): string {
+  if (score === null) return 'text-gray-600'
+  const rel = score - par
+  if (rel <= -2) return 'text-yellow-400'
+  if (rel === -1) return 'text-[#4ade80]'
+  if (rel === 0) return 'text-gray-400'
+  if (rel === 1) return 'text-orange-400'
+  return 'text-red-400'
+}
+
+// Mini strip chip colors
+function miniChipStyle(score: number | null, par: number): string {
+  if (score === null) return 'bg-[#1a2e1d] text-gray-600'
+  const rel = score - par
+  if (rel <= -2) return 'bg-yellow-400 text-black'
+  if (rel === -1) return 'bg-[#4ade80] text-black'
+  if (rel === 0) return 'bg-[#2a3d2c] text-gray-300'
+  if (rel === 1) return 'bg-orange-500 text-white'
   return 'bg-red-500 text-white'
 }
 
-// Mini chip (used in the strip at the bottom)
-function miniScoreBg(score: number | null, par: number): string {
-  if (score === null) return 'bg-gray-100 text-gray-300'
-  const rel = score - par
-  if (rel <= -2) return 'bg-yellow-400 text-yellow-900'
-  if (rel === -1) return 'bg-green-500 text-white'
-  if (rel === 0) return 'bg-white text-gray-700 border border-gray-300'
-  if (rel === 1) return 'bg-orange-400 text-white'
-  return 'bg-red-500 text-white'
+// vs-par display for running total
+function relStr(rel: number): string {
+  if (rel === 0) return 'E'
+  return rel > 0 ? `+${rel}` : `${rel}`
 }
 
 // ─── Toggle button ───────────────────────────────────────────────────────────
@@ -67,8 +80,8 @@ function miniScoreBg(score: number | null, par: number): string {
 function Toggle({
   value,
   onChange,
-  yes = 'Yes',
-  no = 'No',
+  yes = 'Hit',
+  no = 'Miss',
 }: {
   value: boolean | null
   onChange: (v: boolean) => void
@@ -76,23 +89,23 @@ function Toggle({
   no?: string
 }) {
   return (
-    <div className="flex rounded-xl border border-gray-200 overflow-hidden">
+    <div className="flex rounded-xl overflow-hidden border border-[#2a3d2c]">
       <button
         onClick={() => onChange(true)}
-        className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${
+        className={`flex-1 py-2.5 text-sm font-bold transition-colors ${
           value === true
-            ? 'bg-green-600 text-white'
-            : 'bg-white text-gray-500 hover:bg-gray-50'
+            ? 'bg-[#4ade80] text-black'
+            : 'bg-[#1a2e1d] text-gray-500 hover:text-gray-300'
         }`}
       >
         {yes}
       </button>
       <button
         onClick={() => onChange(false)}
-        className={`flex-1 py-2.5 text-sm font-semibold border-l border-gray-200 transition-colors ${
+        className={`flex-1 py-2.5 text-sm font-bold border-l border-[#2a3d2c] transition-colors ${
           value === false
             ? 'bg-red-500 text-white'
-            : 'bg-white text-gray-500 hover:bg-gray-50'
+            : 'bg-[#1a2e1d] text-gray-500 hover:text-gray-300'
         }`}
       >
         {no}
@@ -106,26 +119,39 @@ function Toggle({
 export default function ScorecardPage() {
   const router = useRouter()
   const [round, setRound] = useState<RoundState | null>(null)
-  const [currentHole, setCurrentHole] = useState(0) // 0-indexed
+  const [currentHole, setCurrentHole] = useState(0)
+  const [todayRecovery, setTodayRecovery] = useState<number | null>(null)
+  const tabsRef = useRef<HTMLDivElement>(null)
   const stripRef = useRef<HTMLDivElement>(null)
 
-  // Load round from sessionStorage
   useEffect(() => {
     const raw = sessionStorage.getItem('parhub_round')
     if (!raw) { router.replace('/log-round'); return }
-    try {
-      setRound(JSON.parse(raw))
-    } catch {
-      router.replace('/log-round')
-    }
+    try { setRound(JSON.parse(raw)) } catch { router.replace('/log-round') }
   }, [router])
 
-  // Persist to sessionStorage on every change
   useEffect(() => {
     if (round) sessionStorage.setItem('parhub_round', JSON.stringify(round))
   }, [round])
 
-  // Auto-scroll the strip to keep current hole visible
+  // Fetch today's WHOOP recovery for the badge
+  useEffect(() => {
+    fetch('/api/whoop/today')
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => {
+        if (d?.recoveryScore != null) setTodayRecovery(d.recoveryScore)
+      })
+      .catch(() => {})
+  }, [])
+
+  // Scroll hole tab into view
+  useEffect(() => {
+    if (!tabsRef.current) return
+    const el = tabsRef.current.children[currentHole] as HTMLElement | undefined
+    el?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
+  }, [currentHole])
+
+  // Scroll mini strip into view
   useEffect(() => {
     if (!stripRef.current) return
     const el = stripRef.current.children[currentHole] as HTMLElement | undefined
@@ -134,8 +160,8 @@ export default function ScorecardPage() {
 
   if (!round) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <svg className="w-8 h-8 text-green-600 animate-spin" fill="none" viewBox="0 0 24 24">
+      <div className="min-h-screen bg-[#0d1a0f] flex items-center justify-center">
+        <svg className="w-8 h-8 text-[#4ade80] animate-spin" fill="none" viewBox="0 0 24 24">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
         </svg>
@@ -146,28 +172,33 @@ export default function ScorecardPage() {
   const hole = round.holes[currentHole]
   const isLastHole = currentHole === round.holes.length - 1
   const isPar3 = hole.par === 3
+  const isBack9 = hole.hole > 9
+  const displayScore = hole.score ?? hole.par
+
+  // Running totals
+  const completedHoles = round.holes.filter((h) => h.score !== null)
+  const runningScore = completedHoles.reduce((s, h) => s + (h.score ?? 0), 0)
+  const runningPar = completedHoles.reduce((s, h) => s + h.par, 0)
+  const runningVsPar = runningScore - runningPar
+
+  // Recovery badge
+  const recoveryBadge =
+    todayRecovery !== null
+      ? todayRecovery >= 67
+        ? { label: `${Math.round(todayRecovery)}% GREEN`, color: 'text-[#4ade80] bg-[#4ade80]/10 border-[#4ade80]/20' }
+        : todayRecovery >= 34
+        ? { label: `${Math.round(todayRecovery)}% YELLOW`, color: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20' }
+        : { label: `${Math.round(todayRecovery)}% RED`, color: 'text-red-400 bg-red-400/10 border-red-400/20' }
+      : null
 
   function updateHole(updates: Partial<HoleScore>) {
     setRound((prev) => {
       if (!prev) return prev
-      const holes = prev.holes.map((h, i) =>
-        i === currentHole ? { ...h, ...updates } : h
-      )
+      const holes = prev.holes.map((h, i) => (i === currentHole ? { ...h, ...updates } : h))
       return { ...prev, holes }
     })
   }
 
-  function incrementScore() {
-    const next = (hole.score ?? hole.par) + 1
-    updateHole({ score: Math.min(next, hole.par + 8) })
-  }
-
-  function decrementScore() {
-    const next = (hole.score ?? hole.par) - 1
-    updateHole({ score: Math.max(next, 1) })
-  }
-
-  // Default score to par if unset when navigating away
   function navigate(direction: 'prev' | 'next') {
     if (hole.score === null) updateHole({ score: hole.par })
     if (direction === 'next') setCurrentHole((h) => Math.min(h + 1, (round?.holes.length ?? 18) - 1))
@@ -176,140 +207,267 @@ export default function ScorecardPage() {
 
   function handleFinish() {
     if (hole.score === null) updateHole({ score: hole.par })
-    // Small delay to let state flush before navigating
     setTimeout(() => router.push('/log-round/summary'), 50)
   }
 
-  const displayScore = hole.score ?? hole.par
+  const ringColor = scoreRingColor(hole.score, hole.par)
+  const labelColor = scoreLabelColor(hole.score, hole.par)
   const label = scoreLabel(displayScore, hole.par)
-  const bgClass = scoreBg(hole.score, hole.par)
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-green-800 px-4">
+    <div className="min-h-screen bg-[#0d1a0f] flex flex-col">
+      {/* ── Header ── */}
+      <header className="bg-[#0d1a0f] border-b border-[#1a2e1d] px-4">
         <div className="mx-auto max-w-lg flex items-center justify-between h-14">
-          <Link href="/log-round" className="text-green-200 hover:text-white">
+          <Link href="/log-round" className="text-gray-500 hover:text-gray-300 transition-colors">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
             </svg>
           </Link>
+
           <div className="text-center">
-            <p className="text-white font-semibold text-sm leading-tight">{round.courseName}</p>
-            <p className="text-green-300 text-xs">{round.teeBox} tees</p>
+            <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-[#4ade80]">In Progress</p>
+            <p className="text-white font-bold text-sm leading-tight">{round.courseName}</p>
           </div>
-          <div className="w-5" /> {/* spacer */}
+
+          {recoveryBadge ? (
+            <span className={`text-[10px] font-bold rounded-full border px-2 py-0.5 ${recoveryBadge.color}`}>
+              {recoveryBadge.label}
+            </span>
+          ) : (
+            <div className="w-16" />
+          )}
         </div>
       </header>
 
-      <div className="flex-1 mx-auto w-full max-w-lg flex flex-col pb-4">
-        {/* Hole info */}
-        <div className="px-4 pt-5 pb-4 flex items-center justify-between">
-          <div>
-            <p className="text-3xl font-black text-gray-900 leading-none">
-              Hole {hole.hole}
+      {/* ── Running totals strip ── */}
+      <div className="bg-[#111f13] border-b border-[#1a2e1d] px-4 py-2">
+        <div className="mx-auto max-w-lg flex items-center justify-center gap-8">
+          <div className="text-center">
+            <p className="text-xs text-gray-600 font-semibold uppercase tracking-wider">Score</p>
+            <p className="text-lg font-black text-white leading-tight">
+              {completedHoles.length > 0 ? runningScore : '—'}
             </p>
-            <p className="text-sm text-gray-400 mt-1">Par {hole.par}{hole.yardage > 0 ? ` · ${hole.yardage} yd` : ''}</p>
           </div>
-          <p className="text-sm font-medium text-gray-400">
-            {currentHole + 1} / {round.holes.length}
-          </p>
+          <div className="text-center">
+            <p className="text-xs text-gray-600 font-semibold uppercase tracking-wider">vs Par</p>
+            <p className={`text-lg font-black leading-tight ${
+              runningVsPar < 0 ? 'text-[#4ade80]' : runningVsPar > 0 ? 'text-red-400' : 'text-gray-400'
+            }`}>
+              {completedHoles.length > 0 ? relStr(runningVsPar) : '—'}
+            </p>
+          </div>
+          <div className="text-center">
+            <p className="text-xs text-gray-600 font-semibold uppercase tracking-wider">Holes</p>
+            <p className="text-lg font-black text-white leading-tight">
+              {completedHoles.length}/{round.holes.length}
+            </p>
+          </div>
         </div>
+      </div>
 
-        {/* Score section */}
-        <div className="px-4 pb-5">
-          <div className="rounded-2xl bg-white border border-gray-200 p-5">
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Score</p>
-            <div className="flex items-center justify-between gap-4">
-              {/* Decrement */}
+      {/* ── Hole tabs ── */}
+      <div className="bg-[#0d1a0f] px-2 py-2 border-b border-[#1a2e1d]">
+        <div
+          ref={tabsRef}
+          className="mx-auto max-w-lg flex gap-1.5 overflow-x-auto scrollbar-none px-2"
+          style={{ scrollbarWidth: 'none' }}
+        >
+          {round.holes.map((h, i) => {
+            const isActive = i === currentHole
+            const chipStyle = h.score !== null ? miniChipStyle(h.score, h.par) : ''
+
+            return (
               <button
-                onClick={decrementScore}
-                className="w-16 h-16 rounded-full bg-gray-100 hover:bg-gray-200 active:scale-95 transition-all flex items-center justify-center text-2xl font-bold text-gray-700"
+                key={h.hole}
+                onClick={() => setCurrentHole(i)}
+                className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                  isActive
+                    ? 'ring-2 ring-[#4ade80] ring-offset-1 ring-offset-[#0d1a0f]'
+                    : ''
+                } ${h.score !== null ? chipStyle : 'bg-[#1a2e1d] text-gray-600'}`}
               >
-                −
+                {h.score !== null ? h.score : h.hole}
               </button>
+            )
+          })}
+        </div>
+      </div>
 
-              {/* Score display */}
-              <div className="flex-1 flex flex-col items-center gap-1">
-                <span className={`w-20 h-20 rounded-full flex items-center justify-center text-4xl font-black ${bgClass}`}>
-                  {displayScore}
-                </span>
-                {label && (
-                  <span className="text-sm font-semibold text-gray-500">{label}</span>
-                )}
-              </div>
-
-              {/* Increment */}
-              <button
-                onClick={incrementScore}
-                className="w-16 h-16 rounded-full bg-gray-100 hover:bg-gray-200 active:scale-95 transition-all flex items-center justify-center text-2xl font-bold text-gray-700"
-              >
-                +
-              </button>
+      <div className="flex-1 mx-auto w-full max-w-lg flex flex-col pb-4">
+        {/* ── Hole info ── */}
+        <div className="px-4 pt-4 pb-3 flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className={`text-[10px] font-bold uppercase tracking-[0.1em] ${isBack9 ? 'text-blue-400' : 'text-gray-500'}`}>
+                {isBack9 ? 'BACK 9' : 'FRONT 9'}
+              </span>
             </div>
+            <p className="text-3xl font-black text-white leading-none mt-0.5">
+              Par {hole.par}
+              {hole.yardage > 0 && (
+                <span className="text-lg font-bold text-gray-500 ml-2">{hole.yardage} yds</span>
+              )}
+            </p>
+            <p className="text-gray-500 text-sm mt-0.5">Hole {hole.hole}</p>
           </div>
         </div>
 
-        {/* Putts */}
+        {/* ── Score input ── */}
         <div className="px-4 pb-4">
-          <div className="rounded-2xl bg-white border border-gray-200 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">Putts</p>
-            <div className="flex gap-2">
-              {[1, 2, 3, 4].map((n) => (
+          <div className="flex items-center justify-between gap-3">
+            {/* Minus 2 */}
+            <button
+              onClick={() => updateHole({ score: Math.max((hole.score ?? hole.par) - 2, 1) })}
+              className="w-14 h-14 rounded-full bg-[#1a2e1d] border border-[#2a3d2c] flex items-center justify-center text-white font-bold text-sm hover:bg-[#1e3220] active:scale-95 transition-all"
+            >
+              −2
+            </button>
+
+            {/* Minus 1 */}
+            <button
+              onClick={() => updateHole({ score: Math.max((hole.score ?? hole.par) - 1, 1) })}
+              className="w-16 h-16 rounded-full bg-[#1a2e1d] border border-[#2a3d2c] flex items-center justify-center text-white font-bold text-xl hover:bg-[#1e3220] active:scale-95 transition-all"
+            >
+              −
+            </button>
+
+            {/* Score display */}
+            <div className="flex flex-col items-center gap-1.5">
+              <div
+                className="w-[88px] h-[88px] rounded-full flex items-center justify-center text-5xl font-black text-white border-4 transition-all"
+                style={{ borderColor: ringColor, boxShadow: `0 0 20px ${ringColor}30` }}
+              >
+                {displayScore}
+              </div>
+              {label && (
+                <span className={`text-xs font-bold tracking-wide ${labelColor}`}>{label}</span>
+              )}
+            </div>
+
+            {/* Plus 1 */}
+            <button
+              onClick={() => updateHole({ score: Math.min((hole.score ?? hole.par) + 1, hole.par + 8) })}
+              className="w-16 h-16 rounded-full bg-[#4ade80] flex items-center justify-center text-black font-bold text-xl hover:bg-[#22c55e] active:scale-95 transition-all"
+            >
+              +
+            </button>
+
+            {/* Spacer to balance the −2 */}
+            <div className="w-14 h-14" />
+          </div>
+        </div>
+
+        {/* ── Putts ── */}
+        <div className="px-4 pb-3">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-600 mb-2">Putts</p>
+          <div className="flex gap-2">
+            {[1, 2, 3, 4].map((n) => (
+              <button
+                key={n}
+                onClick={() => updateHole({ putts: hole.putts === n ? null : n })}
+                className={`flex-1 h-11 rounded-xl text-sm font-bold transition-all ${
+                  hole.putts === n
+                    ? 'bg-[#4ade80] text-black'
+                    : 'bg-[#1a2e1d] border border-[#2a3d2c] text-gray-400 hover:text-white'
+                }`}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Stat toggles: FAIRWAY / GIR / SAND ── */}
+        <div className="px-4 pb-4 grid grid-cols-3 gap-2">
+          {/* Fairway (par 4/5 only) */}
+          <div>
+            <p className="text-[9px] font-semibold uppercase tracking-[0.1em] text-gray-600 mb-1.5 text-center">
+              Fairway
+            </p>
+            {!isPar3 ? (
+              <div className="flex rounded-xl overflow-hidden border border-[#2a3d2c]">
                 <button
-                  key={n}
-                  onClick={() => updateHole({ putts: hole.putts === n ? null : n })}
-                  className={`flex-1 h-11 rounded-xl text-sm font-bold transition-all ${
-                    hole.putts === n
-                      ? 'bg-green-600 text-white shadow-sm'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  onClick={() => updateHole({ fairwayHit: hole.fairwayHit === true ? null : true })}
+                  className={`flex-1 py-2.5 text-xs font-bold transition-colors ${
+                    hole.fairwayHit === true ? 'bg-[#4ade80] text-black' : 'bg-[#1a2e1d] text-gray-500'
                   }`}
                 >
-                  {n}
+                  ✓
                 </button>
-              ))}
-            </div>
+                <button
+                  onClick={() => updateHole({ fairwayHit: hole.fairwayHit === false ? null : false })}
+                  className={`flex-1 py-2.5 text-xs font-bold border-l border-[#2a3d2c] transition-colors ${
+                    hole.fairwayHit === false ? 'bg-red-500 text-white' : 'bg-[#1a2e1d] text-gray-500'
+                  }`}
+                >
+                  ✗
+                </button>
+              </div>
+            ) : (
+              <div className="rounded-xl bg-[#111f13] border border-[#2a3d2c] py-2.5 text-center">
+                <span className="text-[10px] text-gray-700">N/A</span>
+              </div>
+            )}
           </div>
-        </div>
 
-        {/* Fairway Hit (par 4/5 only) */}
-        {!isPar3 && (
-          <div className="px-4 pb-4">
-            <div className="rounded-2xl bg-white border border-gray-200 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">
-                Fairway Hit
-              </p>
-              <Toggle
-                value={hole.fairwayHit}
-                onChange={(v) => updateHole({ fairwayHit: v })}
-                yes="Hit ✓"
-                no="Miss ✗"
-              />
-            </div>
-          </div>
-        )}
-
-        {/* GIR */}
-        <div className="px-4 pb-5">
-          <div className="rounded-2xl bg-white border border-gray-200 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">
-              Green in Regulation
+          {/* GIR */}
+          <div>
+            <p className="text-[9px] font-semibold uppercase tracking-[0.1em] text-gray-600 mb-1.5 text-center">
+              GIR
             </p>
-            <Toggle
-              value={hole.gir}
-              onChange={(v) => updateHole({ gir: v })}
-              yes="Yes ✓"
-              no="No ✗"
-            />
+            <div className="flex rounded-xl overflow-hidden border border-[#2a3d2c]">
+              <button
+                onClick={() => updateHole({ gir: hole.gir === true ? null : true })}
+                className={`flex-1 py-2.5 text-xs font-bold transition-colors ${
+                  hole.gir === true ? 'bg-[#4ade80] text-black' : 'bg-[#1a2e1d] text-gray-500'
+                }`}
+              >
+                ✓
+              </button>
+              <button
+                onClick={() => updateHole({ gir: hole.gir === false ? null : false })}
+                className={`flex-1 py-2.5 text-xs font-bold border-l border-[#2a3d2c] transition-colors ${
+                  hole.gir === false ? 'bg-red-500 text-white' : 'bg-[#1a2e1d] text-gray-500'
+                }`}
+              >
+                ✗
+              </button>
+            </div>
+          </div>
+
+          {/* Sand */}
+          <div>
+            <p className="text-[9px] font-semibold uppercase tracking-[0.1em] text-gray-600 mb-1.5 text-center">
+              Sand
+            </p>
+            <div className="flex rounded-xl overflow-hidden border border-[#2a3d2c]">
+              <button
+                onClick={() => updateHole({ inSand: hole.inSand === true ? null : true })}
+                className={`flex-1 py-2.5 text-xs font-bold transition-colors ${
+                  hole.inSand === true ? 'bg-yellow-500 text-black' : 'bg-[#1a2e1d] text-gray-500'
+                }`}
+              >
+                ✓
+              </button>
+              <button
+                onClick={() => updateHole({ inSand: hole.inSand === false ? null : false })}
+                className={`flex-1 py-2.5 text-xs font-bold border-l border-[#2a3d2c] transition-colors ${
+                  hole.inSand === false ? 'bg-[#1a2e1d] text-gray-400' : 'bg-[#1a2e1d] text-gray-500'
+                }`}
+              >
+                —
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Navigation */}
+        {/* ── Navigation ── */}
         <div className="px-4 pb-4 mt-auto">
           {isLastHole ? (
             <button
               onClick={handleFinish}
-              className="w-full rounded-2xl bg-green-700 px-6 py-4 text-base font-bold text-white shadow-md shadow-green-700/25 hover:bg-green-800 active:scale-[0.98] transition-all"
+              className="w-full rounded-2xl bg-[#4ade80] px-6 py-4 text-base font-black text-black hover:bg-[#22c55e] active:scale-[0.98] transition-all"
             >
               Finish Round →
             </button>
@@ -318,40 +476,41 @@ export default function ScorecardPage() {
               <button
                 onClick={() => navigate('prev')}
                 disabled={currentHole === 0}
-                className="flex-1 rounded-2xl border-2 border-gray-200 bg-white py-3.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 active:scale-[0.98] transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                className="flex-1 rounded-2xl bg-[#1a2e1d] border border-[#2a3d2c] py-3.5 text-sm font-bold text-gray-400 hover:text-white hover:bg-[#1e3220] active:scale-[0.98] transition-all disabled:opacity-25 disabled:cursor-not-allowed"
               >
-                ← Prev
+                ← Prev Hole
               </button>
               <button
                 onClick={() => navigate('next')}
-                className="flex-[2] rounded-2xl bg-green-700 py-3.5 text-sm font-bold text-white hover:bg-green-800 active:scale-[0.98] transition-all"
+                className="flex-[2] rounded-2xl bg-[#4ade80] py-3.5 text-sm font-black text-black hover:bg-[#22c55e] active:scale-[0.98] transition-all"
               >
-                Next →
+                Next Hole →
               </button>
             </div>
           )}
         </div>
 
-        {/* Mini scorecard strip */}
+        {/* ── Mini scorecard strip ── */}
         <div className="px-4">
+          <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-gray-700 mb-1.5">
+            Scorecard
+          </p>
           <div
             ref={stripRef}
-            className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none"
+            className="flex gap-1 overflow-x-auto scrollbar-none pb-1"
             style={{ scrollbarWidth: 'none' }}
           >
             {round.holes.map((h, i) => (
               <button
                 key={h.hole}
                 onClick={() => setCurrentHole(i)}
-                className={`shrink-0 flex flex-col items-center rounded-lg px-1.5 py-1 transition-all ${
-                  i === currentHole
-                    ? 'ring-2 ring-green-600 ring-offset-1'
-                    : 'opacity-75 hover:opacity-100'
+                className={`shrink-0 flex flex-col items-center transition-all ${
+                  i === currentHole ? 'opacity-100' : 'opacity-50 hover:opacity-80'
                 }`}
               >
-                <span className="text-[9px] text-gray-400 font-medium mb-0.5">{h.hole}</span>
+                <span className="text-[8px] text-gray-600 font-medium mb-0.5">{h.hole}</span>
                 <span
-                  className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${miniScoreBg(h.score, h.par)}`}
+                  className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold ${miniChipStyle(h.score, h.par)}`}
                 >
                   {h.score ?? '·'}
                 </span>

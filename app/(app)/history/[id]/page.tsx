@@ -8,28 +8,27 @@ function relDisplay(rel: number): string {
 }
 
 function relColor(rel: number): string {
-  if (rel <= -2) return 'text-yellow-500'
-  if (rel === -1) return 'text-green-600'
-  if (rel === 0) return 'text-gray-500'
-  if (rel === 1) return 'text-orange-500'
-  return 'text-red-500'
+  if (rel <= -2) return 'text-yellow-400'
+  if (rel === -1) return 'text-[#4ade80]'
+  if (rel === 0) return 'text-[#555]'
+  if (rel === 1) return 'text-orange-400'
+  return 'text-red-400'
 }
 
 function recoveryColor(score: number | null): string {
-  if (score === null) return 'text-gray-400'
-  if (score >= 67) return 'text-green-600'
-  if (score >= 34) return 'text-yellow-500'
-  return 'text-red-500'
+  if (score === null) return 'text-[#555]'
+  if (score >= 67) return 'text-[#4ade80]'
+  if (score >= 34) return 'text-yellow-400'
+  return 'text-red-400'
 }
 
-// Returns Tailwind classes for the score chip in the hole table
 function scoreChipClass(score: number | null, par: number): string {
   if (score === null) return ''
   const rel = score - par
-  if (rel <= -2) return 'bg-yellow-400 text-yellow-900 rounded-full'
-  if (rel === -1) return 'bg-green-500 text-white rounded-full'
-  if (rel === 0) return 'text-gray-700'
-  if (rel === 1) return 'bg-orange-400 text-white rounded'
+  if (rel <= -2) return 'bg-yellow-400 text-black rounded-full'
+  if (rel === -1) return 'bg-[#4ade80] text-black rounded-full'
+  if (rel === 0) return 'text-[#555]'
+  if (rel === 1) return 'bg-orange-500 text-white rounded'
   return 'bg-red-500 text-white rounded'
 }
 
@@ -70,20 +69,20 @@ export default async function RoundDetailPage({
     round.total_score !== null && totalPar > 0 ? round.total_score - totalPar : null
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-10">
+    <div className="pb-10">
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-green-800 px-4">
+      <header className="sticky top-0 z-40 bg-[#0d1a0f] border-b border-[#2a3d2c] px-4">
         <div className="mx-auto max-w-lg flex items-center gap-3 h-14">
-          <Link href="/history" className="text-green-200 hover:text-white shrink-0">
+          <Link href="/history" className="text-[#4ade80] hover:text-white shrink-0">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
             </svg>
           </Link>
           <div className="min-w-0">
-            <p className="text-white font-semibold text-sm leading-tight truncate">
+            <p className="text-white font-bold text-sm leading-tight truncate">
               {round.course_name}
             </p>
-            <p className="text-green-300 text-xs">
+            <p className="text-[#555] text-xs">
               {new Date(round.date_played).toLocaleDateString('en-US', {
                 weekday: 'short',
                 month: 'short',
@@ -97,12 +96,12 @@ export default async function RoundDetailPage({
 
       <div className="mx-auto max-w-lg px-4 pt-5 space-y-5">
         {/* Score hero */}
-        <div className="rounded-2xl bg-white border border-gray-200 p-5 flex items-center justify-between">
+        <div className="rounded-2xl bg-[#1a2e1d] border border-[#2a3d2c] p-5 flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+            <p className="text-[10px] font-semibold uppercase tracking-[1.5px] text-[#555] mb-1">
               Final Score
             </p>
-            <p className="text-6xl font-black text-gray-900 leading-none mt-1">
+            <p className="text-6xl font-black text-white leading-none">
               {round.total_score ?? '—'}
             </p>
           </div>
@@ -111,17 +110,14 @@ export default async function RoundDetailPage({
               <p className={`text-4xl font-black leading-none ${relColor(scoreVsPar)}`}>
                 {relDisplay(scoreVsPar)}
               </p>
-              <p className="text-xs text-gray-400 mt-1">vs par {totalPar}</p>
+              <p className="text-xs text-[#555] mt-1">vs par {totalPar}</p>
             </div>
           )}
         </div>
 
         {/* Stats row */}
         <div className="grid grid-cols-3 gap-3">
-          <StatCard
-            label="Putts"
-            value={round.total_putts ?? '—'}
-          />
+          <StatCard label="Putts" value={round.total_putts ?? '—'} />
           <StatCard
             label="Fairways"
             value={
@@ -130,43 +126,38 @@ export default async function RoundDetailPage({
                 : '—'
             }
           />
-          <StatCard
-            label="GIR"
-            value={round.gir !== null ? `${round.gir}/18` : '—'}
-          />
+          <StatCard label="GIR" value={round.gir !== null ? `${round.gir}/18` : '—'} />
         </div>
 
-        {/* WHOOP data (if available) */}
+        {/* WHOOP data */}
         {(round.whoop_recovery !== null ||
           round.whoop_hrv !== null ||
           round.whoop_sleep_hours !== null) && (
           <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2 px-1">
+            <h3 className="text-[10px] font-semibold uppercase tracking-[1.5px] text-[#555] mb-2 px-1">
               WHOOP — Day of Round
             </h3>
-            <div className="rounded-2xl bg-white border border-gray-200 overflow-hidden">
-              <div className="grid grid-cols-3 divide-x divide-gray-100">
+            <div className="rounded-2xl bg-[#1a2e1d] border border-[#2a3d2c] overflow-hidden">
+              <div className="grid grid-cols-3 divide-x divide-[#2a3d2c]">
                 <div className="flex flex-col items-center py-3">
-                  <span
-                    className={`text-lg font-bold leading-none ${recoveryColor(round.whoop_recovery)}`}
-                  >
+                  <span className={`text-lg font-bold leading-none ${recoveryColor(round.whoop_recovery)}`}>
                     {round.whoop_recovery !== null
                       ? `${Math.round(round.whoop_recovery)}%`
                       : '—'}
                   </span>
-                  <span className="text-xs text-gray-400 mt-1">Recovery</span>
+                  <span className="text-xs text-[#555] mt-1">Recovery</span>
                 </div>
                 <div className="flex flex-col items-center py-3">
-                  <span className="text-lg font-bold text-gray-900 leading-none">
+                  <span className="text-lg font-bold text-white leading-none">
                     {round.whoop_hrv !== null ? `${round.whoop_hrv}ms` : '—'}
                   </span>
-                  <span className="text-xs text-gray-400 mt-1">HRV</span>
+                  <span className="text-xs text-[#555] mt-1">HRV</span>
                 </div>
                 <div className="flex flex-col items-center py-3">
-                  <span className="text-lg font-bold text-gray-900 leading-none">
+                  <span className="text-lg font-bold text-white leading-none">
                     {round.whoop_sleep_hours !== null ? `${round.whoop_sleep_hours}h` : '—'}
                   </span>
-                  <span className="text-xs text-gray-400 mt-1">Sleep</span>
+                  <span className="text-xs text-[#555] mt-1">Sleep</span>
                 </div>
               </div>
             </div>
@@ -176,69 +167,65 @@ export default async function RoundDetailPage({
         {/* Hole-by-hole table */}
         {holeRows.length > 0 && (
           <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2 px-1">
+            <h3 className="text-[10px] font-semibold uppercase tracking-[1.5px] text-[#555] mb-2 px-1">
               Scorecard
             </h3>
-            <div className="rounded-2xl bg-white border border-gray-200 overflow-hidden">
+            <div className="rounded-2xl bg-[#1a2e1d] border border-[#2a3d2c] overflow-hidden">
               {/* Header */}
-              <div className="grid grid-cols-7 border-b border-gray-100 bg-gray-50 px-3 py-2">
+              <div className="grid grid-cols-7 border-b border-[#2a3d2c] bg-[#111f13] px-3 py-2">
                 {['Hole', 'Par', 'Yds', 'Score', 'Putts', 'FIR', 'GIR'].map((h) => (
-                  <span key={h} className="text-[10px] font-semibold text-gray-400 text-center">
+                  <span key={h} className="text-[10px] font-semibold text-[#555] text-center">
                     {h}
                   </span>
                 ))}
               </div>
 
               {/* Rows */}
-              <div className="divide-y divide-gray-50">
+              <div className="divide-y divide-[#2a3d2c]">
                 {holeRows.map((h) => {
                   const chipClass = scoreChipClass(h.score, h.par)
                   const isStyled = h.score !== null && h.score - h.par !== 0
                   return (
-                    <div
-                      key={h.hole_number}
-                      className="grid grid-cols-7 px-3 py-2 items-center"
-                    >
-                      <span className="text-xs font-medium text-gray-500 text-center">
+                    <div key={h.hole_number} className="grid grid-cols-7 px-3 py-2 items-center">
+                      <span className="text-xs font-bold text-[#999] text-center">
                         {h.hole_number}
                       </span>
-                      <span className="text-xs text-gray-400 text-center">{h.par}</span>
-                      <span className="text-xs text-gray-400 text-center">
+                      <span className="text-xs text-[#555] text-center">{h.par}</span>
+                      <span className="text-xs text-[#555] text-center">
                         {h.yardage ?? '—'}
                       </span>
                       <div className="flex justify-center">
                         {h.score !== null ? (
                           <span
-                            className={`${isStyled ? 'w-7 h-7 flex items-center justify-center text-xs font-bold' : 'text-sm font-medium text-center'} ${chipClass}`}
+                            className={`${isStyled ? 'w-7 h-7 flex items-center justify-center text-xs font-bold' : 'text-sm font-medium text-center text-[#999]'} ${chipClass}`}
                           >
                             {h.score}
                           </span>
                         ) : (
-                          <span className="text-xs text-gray-300">—</span>
+                          <span className="text-xs text-[#555]">—</span>
                         )}
                       </div>
-                      <span className="text-xs text-gray-500 text-center">
+                      <span className="text-xs text-[#555] text-center">
                         {h.putts ?? '—'}
                       </span>
-                      {/* FIR — only meaningful on par 4/5 */}
                       <span className="text-center">
                         {h.par === 3 ? (
-                          <span className="text-gray-200 text-xs">—</span>
+                          <span className="text-[#555] text-xs">—</span>
                         ) : h.fairway_hit === true ? (
-                          <span className="text-green-500 text-xs">✓</span>
+                          <span className="text-[#4ade80] text-xs">✓</span>
                         ) : h.fairway_hit === false ? (
-                          <span className="text-gray-300 text-xs">✗</span>
+                          <span className="text-[#555] text-xs">✗</span>
                         ) : (
-                          <span className="text-gray-200 text-xs">—</span>
+                          <span className="text-[#555] text-xs">—</span>
                         )}
                       </span>
                       <span className="text-center">
                         {h.gir === true ? (
-                          <span className="text-green-500 text-xs">✓</span>
+                          <span className="text-[#4ade80] text-xs">✓</span>
                         ) : h.gir === false ? (
-                          <span className="text-gray-300 text-xs">✗</span>
+                          <span className="text-[#555] text-xs">✗</span>
                         ) : (
-                          <span className="text-gray-200 text-xs">—</span>
+                          <span className="text-[#555] text-xs">—</span>
                         )}
                       </span>
                     </div>
@@ -247,21 +234,21 @@ export default async function RoundDetailPage({
               </div>
 
               {/* Totals */}
-              <div className="grid grid-cols-7 border-t border-gray-200 bg-gray-50 px-3 py-2 items-center">
-                <span className="text-xs font-bold text-gray-600 text-center col-span-2">
+              <div className="grid grid-cols-7 border-t border-[#2a3d2c] bg-[#111f13] px-3 py-2 items-center">
+                <span className="text-xs font-bold text-[#999] text-center col-span-2">
                   Total
                 </span>
-                <span className="text-xs text-gray-400 text-center" />
-                <span className="text-xs font-bold text-gray-900 text-center">
+                <span />
+                <span className="text-xs font-bold text-white text-center">
                   {round.total_score ?? '—'}
                 </span>
-                <span className="text-xs font-bold text-gray-900 text-center">
+                <span className="text-xs font-bold text-white text-center">
                   {round.total_putts ?? '—'}
                 </span>
-                <span className="text-xs font-bold text-gray-900 text-center">
+                <span className="text-xs font-bold text-white text-center">
                   {round.fairways_hit ?? '—'}
                 </span>
-                <span className="text-xs font-bold text-gray-900 text-center">
+                <span className="text-xs font-bold text-white text-center">
                   {round.gir ?? '—'}
                 </span>
               </div>
@@ -272,11 +259,11 @@ export default async function RoundDetailPage({
         {/* Notes */}
         {round.notes && (
           <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2 px-1">
+            <h3 className="text-[10px] font-semibold uppercase tracking-[1.5px] text-[#555] mb-2 px-1">
               Notes
             </h3>
-            <div className="rounded-2xl bg-white border border-gray-200 px-4 py-3">
-              <p className="text-sm text-gray-700 leading-relaxed">{round.notes}</p>
+            <div className="rounded-2xl bg-[#1a2e1d] border border-[#2a3d2c] px-4 py-3">
+              <p className="text-sm text-[#999] leading-relaxed">{round.notes}</p>
             </div>
           </section>
         )}
@@ -287,9 +274,9 @@ export default async function RoundDetailPage({
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-2xl bg-white border border-gray-200 px-3 py-3 text-center">
-      <p className="text-xl font-black text-gray-900">{value}</p>
-      <p className="text-xs text-gray-400 mt-0.5">{label}</p>
+    <div className="rounded-2xl bg-[#1a2e1d] border border-[#2a3d2c] px-3 py-3 text-center">
+      <p className="text-xl font-black text-white">{value}</p>
+      <p className="text-[10px] font-semibold uppercase tracking-[1.5px] text-[#555] mt-1">{label}</p>
     </div>
   )
 }

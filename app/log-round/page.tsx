@@ -166,9 +166,9 @@ export default function CourseSearchPage() {
   const displayTees = availableTees.length > 0 ? availableTees : [...TEE_COLORS]
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-[#0d1a0f] flex flex-col">
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-green-800 px-4">
+      <header className="sticky top-0 z-40 bg-[#0d1a0f] border-b border-[#1e1e1e] px-4">
         <div className="mx-auto max-w-lg flex items-center gap-3 h-14">
           <Link href="/" className="text-green-200 hover:text-white">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
@@ -197,7 +197,7 @@ export default function CourseSearchPage() {
               value={query}
               onChange={(e) => handleQueryChange(e.target.value)}
               placeholder="Search golf courses…"
-              className="w-full rounded-2xl border border-gray-200 bg-white pl-10 pr-4 py-3.5 text-sm text-gray-900 placeholder-gray-400 shadow-sm focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500"
+              className="w-full rounded-2xl border border-[#2a3d2c] bg-[#1a2e1d] pl-10 pr-4 py-3.5 text-sm text-gray-900 placeholder-gray-400 shadow-sm focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-[#4ade80]/30"
             />
             {searching && (
               <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -211,14 +211,14 @@ export default function CourseSearchPage() {
 
           {/* Results */}
           {results.length > 0 && (
-            <div className="mt-3 rounded-2xl bg-white border border-gray-200 overflow-hidden divide-y divide-gray-100 shadow-sm">
+            <div className="mt-3 rounded-2xl bg-[#1a2e1d] border border-[#2a3d2c] overflow-hidden divide-y divide-[#2a2a2a] shadow-sm">
               {results.map((course) => (
                 <button
                   key={course.id}
                   onClick={() => handleSelectCourse(course)}
-                  className="w-full text-left px-4 py-3.5 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+                  className="w-full text-left px-4 py-3.5 hover:bg-[#1e3220] active:bg-[#223527] transition-colors"
                 >
-                  <p className="text-sm font-medium text-gray-900">{course.club_name}</p>
+                  <p className="text-sm font-medium text-white">{course.club_name}</p>
                   {course.location && (
                     <p className="text-xs text-gray-400 mt-0.5">
                       {[course.location.city, course.location.state, course.location.country]
@@ -244,7 +244,7 @@ export default function CourseSearchPage() {
       {step === 'setup' && selectedCourse && (
         <div className="flex-1 mx-auto w-full max-w-lg px-4 pt-5 space-y-5 pb-8">
           {/* Selected course */}
-          <div className="rounded-2xl bg-white border border-gray-200 px-4 py-3.5">
+          <div className="rounded-2xl bg-[#1a2e1d] border border-[#2a3d2c] px-4 py-3.5">
             <p className="font-semibold text-gray-900">{selectedCourse.club_name}</p>
             {selectedCourse.location && (
               <p className="text-xs text-gray-400 mt-0.5">
@@ -260,7 +260,7 @@ export default function CourseSearchPage() {
             <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2 px-1">
               Tee Box
             </h2>
-            <div className="rounded-2xl bg-white border border-gray-200 overflow-hidden divide-y divide-gray-100">
+            <div className="rounded-2xl bg-[#1a2e1d] border border-[#2a3d2c] overflow-hidden divide-y divide-[#2a2a2a]">
               {displayTees.map((tee) => {
                 const isStandard = (TEE_COLORS as readonly string[]).includes(tee)
                 const dotClass = isStandard
@@ -270,11 +270,11 @@ export default function CourseSearchPage() {
                   <button
                     key={tee}
                     onClick={() => setTeeBox(tee)}
-                    className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+                    className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-[#1e3220] active:bg-[#223527] transition-colors"
                   >
                     <div className="flex items-center gap-3">
                       <span className={`w-3.5 h-3.5 rounded-full shrink-0 ${dotClass}`} />
-                      <span className="text-sm font-medium text-gray-900">{tee}</span>
+                      <span className="text-sm font-medium text-white">{tee}</span>
                     </div>
                     <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
                       teeBox === tee ? 'border-green-600 bg-green-600' : 'border-gray-300'
@@ -303,8 +303,8 @@ export default function CourseSearchPage() {
                   onClick={() => setTransport(t)}
                   className={`rounded-2xl border-2 px-4 py-4 text-sm font-semibold transition-all ${
                     transport === t
-                      ? 'border-green-600 bg-green-50 text-green-700'
-                      : 'border-gray-200 bg-white text-gray-600'
+                      ? 'border-[#4ade80] bg-[#4ade80]/10 text-[#4ade80]'
+                      : 'border-[#2a3d2c] bg-[#1a2e1d] text-gray-400'
                   }`}
                 >
                   <span className="text-2xl block mb-1">{t === 'walking' ? '🚶' : '🚗'}</span>
@@ -318,7 +318,7 @@ export default function CourseSearchPage() {
           <button
             onClick={handleStartRound}
             disabled={starting}
-            className="w-full rounded-2xl bg-green-700 px-6 py-4 text-base font-bold text-white shadow-md shadow-green-700/25 hover:bg-green-800 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full rounded-2xl bg-[#4ade80] px-6 py-4 text-base font-black text-black hover:bg-[#22c55e] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {starting ? (
               <span className="flex items-center justify-center gap-2">
