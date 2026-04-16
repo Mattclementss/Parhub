@@ -145,11 +145,20 @@ export default async function HomePage() {
   const pendingFriendRequests = pendingCount ?? 0
   const friendIds = (friendships ?? []).map((f) => f.friend_id)
 
-  // WHOOP
-  const whoopData = whoopToken ? await getWhoopData(user.id).catch(() => null) : null
+  // WHOOP + AI insight — run in parallel, cap AI at 4s so slow generation
+  // never holds up the rest of the page
+  const timeout = <T,>(ms: number): Promise<T | null> =>
+    new Promise((resolve) => setTimeout(() => resolve(null), ms))
 
-  // AI insight (cached daily, non-blocking)
-  const insight = whoopToken ? await getOrGenerateDailyInsight(user.id).catch(() => null) : null
+  const [whoopData, insight] = await Promise.all([
+    whoopToken ? getWhoopData(user.id).catch(() => null) : Promise.resolve(null),
+    whoopToken
+      ? Promise.race([
+          getOrGenerateDailyInsight(user.id).catch(() => null),
+          timeout<Awaited<ReturnType<typeof getOrGenerateDailyInsight>>>(4000),
+        ])
+      : Promise.resolve(null),
+  ])
 
   // Weekly chart — built from WHOOP API data (weeklyRecovery), not Supabase rounds
   const DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
