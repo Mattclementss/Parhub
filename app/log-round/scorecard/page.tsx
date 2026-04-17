@@ -206,8 +206,13 @@ export default function ScorecardPage() {
   }
 
   function handleFinish() {
-    if (hole.score === null) updateHole({ score: hole.par })
-    setTimeout(() => router.push('/log-round/summary'), 50)
+    // Write directly to sessionStorage — don't rely on useEffect timing
+    const finalHoles = round.holes.map((h, i) =>
+      i === currentHole && h.score === null ? { ...h, score: h.par } : h
+    )
+    const finalRound = { ...round, holes: finalHoles }
+    sessionStorage.setItem('parhub_round', JSON.stringify(finalRound))
+    router.push('/log-round/summary')
   }
 
   const ringColor = scoreRingColor(hole.score, hole.par)

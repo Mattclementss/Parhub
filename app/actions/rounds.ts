@@ -82,7 +82,7 @@ export async function saveRound(payload: RoundPayload) {
   if (error || !round) throw new Error(error?.message ?? 'Failed to save round')
 
   if (scoredHoles.length > 0) {
-    await supabase.from('holes').insert(
+    const { error: holesError } = await supabase.from('holes').insert(
       scoredHoles.map((h) => ({
         round_id: round.id,
         hole_number: h.hole,
@@ -95,6 +95,7 @@ export async function saveRound(payload: RoundPayload) {
         sand_save: null,
       }))
     )
+    if (holesError) throw new Error(`Failed to save hole data: ${holesError.message}`)
   }
 
   redirect('/')
