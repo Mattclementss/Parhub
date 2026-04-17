@@ -9,13 +9,14 @@ const allowedOrigins = [
 ]
 
 // ─── Content Security Policy ──────────────────────────────────────────────────
-// In development Next.js (Turbopack) injects inline scripts — 'unsafe-inline'
-// and 'unsafe-eval' are needed. Strip them in production.
+// Next.js App Router requires 'unsafe-inline' for RSC streaming and hydration
+// scripts in both dev and production. 'unsafe-eval' is only needed by Turbopack
+// in development.
 const csp = [
   "default-src 'self'",
   isDev
     ? "script-src 'self' 'unsafe-eval' 'unsafe-inline'"
-    : "script-src 'self'",
+    : "script-src 'self' 'unsafe-inline'",
   "style-src 'self' 'unsafe-inline'", // Tailwind injects inline styles
   "img-src 'self' data: blob:",
   "font-src 'self'",
