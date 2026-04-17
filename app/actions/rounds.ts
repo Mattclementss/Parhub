@@ -2,6 +2,7 @@
 
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { getWhoopData } from '@/lib/whoop/client'
 
 export interface HoleScore {
   hole: number
@@ -38,6 +39,26 @@ export async function saveRound(payload: RoundPayload) {
   const fairwaysPossible = parHoles.length
   const gir = scoredHoles.filter((h) => h.gir === true).length
 
+  // Fetch WHOOP recovery for today if connected
+  const { data: whoopToken } = await supabase
+    .from('whoop_tokens')
+    .select('user_id')
+    .eq('user_id', user.id)
+    .single()
+
+  let whoopRecovery: number | null = null
+  let whoopHrv: number | null = null
+  let whoopSleepHours: number | null = null
+
+  if (whoopToken) {
+    const whoopData = await getWhoopData(user.id).catch(() => null)
+    if (whoopData) {
+      whoopRecovery = whoopData.recoveryScore
+      whoopHrv = whoopData.hrv
+      whoopSleepHours = whoopData.sleepHours
+    }
+  }
+
   const { data: round, error } = await supabase
     .from('rounds')
     .insert({
@@ -51,6 +72,9 @@ export async function saveRound(payload: RoundPayload) {
       fairways_possible: fairwaysPossible,
       gir,
       notes: payload.notes || null,
+      whoop_recovery: whoopRecovery,
+      whoop_hrv: whoopHrv,
+      whoop_sleep_hours: whoopSleepHours,
     })
     .select()
     .single()
