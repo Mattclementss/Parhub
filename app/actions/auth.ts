@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 export type AuthState = {
   error?: string
   message?: string
+  success?: boolean
 } | undefined
 
 export async function signUp(state: AuthState, formData: FormData): Promise<AuthState> {
@@ -51,7 +52,7 @@ export async function signIn(state: AuthState, formData: FormData): Promise<Auth
     return { error: error.message }
   }
 
-  redirect('/')
+  return { success: true }
 }
 
 export async function signOut() {

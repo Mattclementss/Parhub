@@ -1,11 +1,19 @@
 'use client'
 
 import Link from 'next/link'
-import { useActionState } from 'react'
+import { useActionState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { signIn } from '@/app/actions/auth'
 
 export default function SignInPage() {
+  const router = useRouter()
   const [state, action, pending] = useActionState(signIn, undefined)
+
+  useEffect(() => {
+    if (state?.success) {
+      router.push('/')
+    }
+  }, [state, router])
 
   return (
     <div className="bg-[#1a2e1d] rounded-2xl border border-[#2a3d2c] p-6">
@@ -50,10 +58,10 @@ export default function SignInPage() {
 
         <button
           type="submit"
-          disabled={pending}
+          disabled={pending || state?.success}
           className="w-full rounded-xl bg-[#4ade80] px-4 py-3 text-sm font-black text-black hover:bg-[#22c55e] focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          {pending ? 'Signing in…' : 'Sign in'}
+          {pending || state?.success ? 'Signing in…' : 'Sign in'}
         </button>
       </form>
 
