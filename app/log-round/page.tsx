@@ -125,8 +125,8 @@ export default function CourseSearchPage() {
 
       const holes =
         selectedTee?.holes?.length === 18
-          ? selectedTee.holes.map((h) => ({
-              hole: h.hole_number,
+          ? selectedTee.holes.map((h, i) => ({
+              hole: i + 1,
               par: h.par,
               yardage: h.yardage ?? 0,
               score: null,
