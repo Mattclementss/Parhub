@@ -206,6 +206,7 @@ export default function ScorecardPage() {
   }
 
   function handleFinish() {
+    if (!round) return
     // Write directly to sessionStorage — don't rely on useEffect timing
     const finalHoles = round.holes.map((h, i) =>
       i === currentHole && h.score === null ? { ...h, score: h.par } : h
