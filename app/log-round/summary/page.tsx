@@ -84,13 +84,14 @@ export default function SummaryPage() {
     if (!round) return
     setSaving(true)
     setError(null)
-    try {
-      await saveRound({ ...round, notes })
-      sessionStorage.removeItem('parhub_round')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save round')
+    const result = await saveRound({ ...round, notes })
+    if (result?.error) {
+      setError(result.error)
       setSaving(false)
+      return
     }
+    sessionStorage.removeItem('parhub_round')
+    router.push('/')
   }
 
   return (

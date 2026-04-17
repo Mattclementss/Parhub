@@ -23,7 +23,7 @@ export interface RoundPayload {
   notes: string
 }
 
-export async function saveRound(payload: RoundPayload) {
+export async function saveRound(payload: RoundPayload): Promise<{ error: string } | null> {
   const supabase = await createClient()
   const {
     data: { user },
@@ -44,7 +44,7 @@ export async function saveRound(payload: RoundPayload) {
     .from('whoop_tokens')
     .select('user_id')
     .eq('user_id', user.id)
-    .single()
+    .maybeSingle()
 
   let whoopRecovery: number | null = null
   let whoopHrv: number | null = null
@@ -79,7 +79,7 @@ export async function saveRound(payload: RoundPayload) {
     .select()
     .single()
 
-  if (error || !round) throw new Error(error?.message ?? 'Failed to save round')
+  if (error || !round) return { error: error?.message ?? 'Failed to save round' }
 
   if (scoredHoles.length > 0) {
     const { error: holesError } = await supabase.from('holes').insert(
@@ -95,8 +95,8 @@ export async function saveRound(payload: RoundPayload) {
         sand_save: null,
       }))
     )
-    if (holesError) throw new Error(`Failed to save hole data: ${holesError.message}`)
+    if (holesError) return { error: `Failed to save hole data: ${holesError.message}` }
   }
 
-  redirect('/')
+  return null
 }
