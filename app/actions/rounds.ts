@@ -100,3 +100,18 @@ export async function saveRound(payload: RoundPayload): Promise<{ error: string 
 
   return null
 }
+
+export async function deleteRound(roundId: string): Promise<{ error: string } | null> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/signin')
+
+  const { error } = await supabase
+    .from('rounds')
+    .delete()
+    .eq('id', roundId)
+    .eq('user_id', user.id)
+
+  if (error) return { error: error.message }
+  return null
+}

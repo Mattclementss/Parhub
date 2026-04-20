@@ -1,6 +1,7 @@
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import DeleteRoundButton from './DeleteRoundButton'
 
 function relDisplay(rel: number): string {
   if (rel === 0) return 'E'
@@ -267,6 +268,8 @@ export default async function RoundDetailPage({
             </div>
           </section>
         )}
+
+        <DeleteRoundButton roundId={round.id} />
       </div>
     </div>
   )
