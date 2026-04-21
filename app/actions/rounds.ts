@@ -50,12 +50,27 @@ export async function saveRound(payload: RoundPayload): Promise<{ error: string 
   let whoopHrv: number | null = null
   let whoopSleepHours: number | null = null
 
+  let whoopRestingHr: number | null = null
+  let whoopRemHours: number | null = null
+  let whoopDeepSleepHours: number | null = null
+  let whoopSleepPerformance: number | null = null
+  let whoopSleepDisturbances: number | null = null
+  let whoopSleepEfficiency: number | null = null
+  let whoopStrainYesterday: number | null = null
+
   if (whoopToken) {
     const whoopData = await getWhoopData(user.id).catch(() => null)
     if (whoopData) {
       whoopRecovery = whoopData.recoveryScore
       whoopHrv = whoopData.hrv
       whoopSleepHours = whoopData.sleepHours
+      whoopRestingHr = whoopData.restingHeartRate
+      whoopRemHours = whoopData.remHours
+      whoopDeepSleepHours = whoopData.deepSleepHours
+      whoopSleepPerformance = whoopData.sleepPerformance
+      whoopSleepDisturbances = whoopData.sleepDisturbances
+      whoopSleepEfficiency = whoopData.sleepEfficiency
+      whoopStrainYesterday = whoopData.strainYesterday
     }
   }
 
@@ -75,6 +90,13 @@ export async function saveRound(payload: RoundPayload): Promise<{ error: string 
       whoop_recovery: whoopRecovery,
       whoop_hrv: whoopHrv,
       whoop_sleep_hours: whoopSleepHours,
+      whoop_resting_hr: whoopRestingHr,
+      whoop_rem_hours: whoopRemHours,
+      whoop_deep_sleep_hours: whoopDeepSleepHours,
+      whoop_sleep_performance: whoopSleepPerformance,
+      whoop_sleep_disturbances: whoopSleepDisturbances,
+      whoop_sleep_efficiency: whoopSleepEfficiency,
+      whoop_strain_yesterday: whoopStrainYesterday,
     })
     .select()
     .single()

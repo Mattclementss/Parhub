@@ -112,7 +112,7 @@ export async function generateWeeklyInsights(userId: string): Promise<WeeklyInsi
   // Fetch last 30 scored rounds
   const { data: rounds } = await supabase
     .from('rounds')
-    .select('total_score, date_played, total_putts, gir, fairways_hit, fairways_possible, whoop_recovery, whoop_hrv, whoop_sleep_hours, course_name, notes')
+    .select('total_score, date_played, total_putts, gir, fairways_hit, fairways_possible, whoop_recovery, whoop_hrv, whoop_sleep_hours, whoop_resting_hr, whoop_rem_hours, whoop_deep_sleep_hours, whoop_sleep_performance, whoop_sleep_disturbances, whoop_sleep_efficiency, whoop_strain_yesterday, course_name, notes')
     .eq('user_id', userId)
     .not('total_score', 'is', null)
     .order('date_played', { ascending: false })
@@ -128,28 +128,17 @@ export async function generateWeeklyInsights(userId: string): Promise<WeeklyInsi
     whoop_recovery: number | null
     whoop_hrv: number | null
     whoop_sleep_hours: number | null
+    whoop_resting_hr: number | null
+    whoop_rem_hours: number | null
+    whoop_deep_sleep_hours: number | null
+    whoop_sleep_performance: number | null
+    whoop_sleep_disturbances: number | null
+    whoop_sleep_efficiency: number | null
+    whoop_strain_yesterday: number | null
     course_name: string
     notes: string | null
   }>
 
-  // Fetch today's WHOOP data
-  const { data: whoopToken } = await supabase
-    .from('whoop_tokens')
-    .select('user_id')
-    .eq('user_id', userId)
-    .single()
-
-  let todayRecovery: number | null = null
-  let todayHrv: number | null = null
-  let todaySleep: number | null = null
-
-  if (whoopToken) {
-    // Get most recent round's WHOOP data as proxy for "recent recovery"
-    const recentWithWhoop = allRounds.find(r => r.whoop_recovery !== null)
-    todayRecovery = recentWithWhoop?.whoop_recovery ?? null
-    todayHrv = recentWithWhoop?.whoop_hrv ?? null
-    todaySleep = recentWithWhoop?.whoop_sleep_hours ?? null
-  }
 
   // ── Compute summary stats ────────────────────────────────────────────────
 
@@ -168,17 +157,47 @@ export async function generateWeeklyInsights(userId: string): Promise<WeeklyInsi
   const yellowRounds = whoopRounds.filter(r => r.whoop_recovery! >= 34 && r.whoop_recovery! < 67)
   const redRounds = whoopRounds.filter(r => r.whoop_recovery! < 34)
 
-  // Sleep correlation
+  // Sleep quality correlations
   const sleep8Plus = allRounds.filter(r => r.whoop_sleep_hours !== null && r.whoop_sleep_hours >= 8)
   const sleep6to8 = allRounds.filter(r => r.whoop_sleep_hours !== null && r.whoop_sleep_hours >= 6 && r.whoop_sleep_hours < 8)
   const sleepUnder6 = allRounds.filter(r => r.whoop_sleep_hours !== null && r.whoop_sleep_hours < 6)
 
+  // Deep + REM sleep correlations
+  const deepSleepRounds = allRounds.filter(r => r.whoop_deep_sleep_hours !== null)
+  const highDeep = deepSleepRounds.filter(r => r.whoop_deep_sleep_hours! >= 1.5)
+  const lowDeep = deepSleepRounds.filter(r => r.whoop_deep_sleep_hours! < 1.5)
+  const remRounds = allRounds.filter(r => r.whoop_rem_hours !== null)
+  const highRem = remRounds.filter(r => r.whoop_rem_hours! >= 1.5)
+  const lowRem = remRounds.filter(r => r.whoop_rem_hours! < 1.5)
+
+  // Sleep disturbances
+  const disturbanceRounds = allRounds.filter(r => r.whoop_sleep_disturbances !== null)
+  const lowDisturbance = disturbanceRounds.filter(r => r.whoop_sleep_disturbances! < 8)
+  const highDisturbance = disturbanceRounds.filter(r => r.whoop_sleep_disturbances! >= 8)
+
+  // Prior day strain
+  const strainRounds = allRounds.filter(r => r.whoop_strain_yesterday !== null)
+  const highStrain = strainRounds.filter(r => r.whoop_strain_yesterday! >= 14)
+  const lowStrain = strainRounds.filter(r => r.whoop_strain_yesterday! < 14)
+
   // Best round
   const bestRound = allRounds.reduce((best, r) => r.total_score < (best?.total_score ?? Infinity) ? r : best, allRounds[0])
 
+  // Most recent WHOOP data for today's context
+  const recentWithWhoop = allRounds.find(r => r.whoop_recovery !== null)
+  const todayRecovery = recentWithWhoop?.whoop_recovery ?? null
+  const todayHrv = recentWithWhoop?.whoop_hrv ?? null
+  const todaySleep = recentWithWhoop?.whoop_sleep_hours ?? null
+  const todayRestingHr = recentWithWhoop?.whoop_resting_hr ?? null
+  const todayDeepSleep = recentWithWhoop?.whoop_deep_sleep_hours ?? null
+  const todayRem = recentWithWhoop?.whoop_rem_hours ?? null
+  const todaySleepPerformance = recentWithWhoop?.whoop_sleep_performance ?? null
+  const todayDisturbances = recentWithWhoop?.whoop_sleep_disturbances ?? null
+  const todayStrainYesterday = recentWithWhoop?.whoop_strain_yesterday ?? null
+
   // ── Build prompt ──────────────────────────────────────────────────────────
 
-  const prompt = `You are a golf performance coach analyzing a player's data. Provide honest, specific, and actionable insights — not generic advice.
+  const prompt = `You are a golf performance coach analyzing a player's biometric and scoring data. Provide honest, specific, and actionable insights — not generic advice. Only reference patterns that are supported by the actual data provided.
 
 PLAYER STATS (last ${allRounds.length} rounds):
 - Season scoring average: ${fmtAvg(scores)}
@@ -196,15 +215,33 @@ ${greenRounds.length > 0 ? `- High recovery (67-100%): ${greenRounds.length} rou
 ${yellowRounds.length > 0 ? `- Medium recovery (34-66%): ${yellowRounds.length} rounds, avg score ${fmtAvg(yellowRounds.map(r => r.total_score))}` : '- Medium recovery (34-66%): no data'}
 ${redRounds.length > 0 ? `- Low recovery (0-33%): ${redRounds.length} rounds, avg score ${fmtAvg(redRounds.map(r => r.total_score))}` : '- Low recovery (0-33%): no data'}
 
-SLEEP IMPACT (rounds with sleep data):
-${sleep8Plus.length > 0 ? `- 8+ hours sleep: ${sleep8Plus.length} rounds, avg score ${fmtAvg(sleep8Plus.map(r => r.total_score))}` : '- 8+ hours sleep: no data'}
-${sleep6to8.length > 0 ? `- 6-8 hours sleep: ${sleep6to8.length} rounds, avg score ${fmtAvg(sleep6to8.map(r => r.total_score))}` : '- 6-8 hours sleep: no data'}
-${sleepUnder6.length > 0 ? `- Under 6 hours sleep: ${sleepUnder6.length} rounds, avg score ${fmtAvg(sleepUnder6.map(r => r.total_score))}` : '- Under 6 hours sleep: no data'}
+SLEEP DURATION vs SCORING:
+${sleep8Plus.length > 0 ? `- 8+ hours: ${sleep8Plus.length} rounds, avg score ${fmtAvg(sleep8Plus.map(r => r.total_score))}` : '- 8+ hours: no data'}
+${sleep6to8.length > 0 ? `- 6-8 hours: ${sleep6to8.length} rounds, avg score ${fmtAvg(sleep6to8.map(r => r.total_score))}` : '- 6-8 hours: no data'}
+${sleepUnder6.length > 0 ? `- Under 6 hours: ${sleepUnder6.length} rounds, avg score ${fmtAvg(sleepUnder6.map(r => r.total_score))}` : '- Under 6 hours: no data'}
 
-TODAY'S BIOMETRICS:
+SLEEP QUALITY vs SCORING:
+${highDeep.length > 0 ? `- High deep sleep (1.5h+): ${highDeep.length} rounds, avg score ${fmtAvg(highDeep.map(r => r.total_score))}` : '- High deep sleep: no data'}
+${lowDeep.length > 0 ? `- Low deep sleep (<1.5h): ${lowDeep.length} rounds, avg score ${fmtAvg(lowDeep.map(r => r.total_score))}` : ''}
+${highRem.length > 0 ? `- High REM (1.5h+): ${highRem.length} rounds, avg score ${fmtAvg(highRem.map(r => r.total_score))}` : '- High REM: no data'}
+${lowRem.length > 0 ? `- Low REM (<1.5h): ${lowRem.length} rounds, avg score ${fmtAvg(lowRem.map(r => r.total_score))}` : ''}
+${lowDisturbance.length > 0 ? `- Low disturbances (<8): ${lowDisturbance.length} rounds, avg score ${fmtAvg(lowDisturbance.map(r => r.total_score))}` : ''}
+${highDisturbance.length > 0 ? `- High disturbances (8+): ${highDisturbance.length} rounds, avg score ${fmtAvg(highDisturbance.map(r => r.total_score))}` : ''}
+
+PRIOR-DAY STRAIN vs SCORING (${strainRounds.length} rounds with data):
+${highStrain.length > 0 ? `- High prior strain (14+): ${highStrain.length} rounds, avg score ${fmtAvg(highStrain.map(r => r.total_score))}` : '- High prior strain: no data'}
+${lowStrain.length > 0 ? `- Low prior strain (<14): ${lowStrain.length} rounds, avg score ${fmtAvg(lowStrain.map(r => r.total_score))}` : '- Low prior strain: no data'}
+
+MOST RECENT BIOMETRICS:
 ${todayRecovery !== null ? `- Recovery score: ${Math.round(todayRecovery)}%` : '- Recovery score: not available'}
 ${todayHrv !== null ? `- HRV: ${todayHrv}ms` : ''}
-${todaySleep !== null ? `- Sleep: ${todaySleep}h` : ''}
+${todayRestingHr !== null ? `- Resting HR: ${todayRestingHr} bpm` : ''}
+${todaySleep !== null ? `- Total sleep: ${todaySleep}h` : ''}
+${todayDeepSleep !== null ? `- Deep sleep: ${todayDeepSleep}h` : ''}
+${todayRem !== null ? `- REM sleep: ${todayRem}h` : ''}
+${todaySleepPerformance !== null ? `- Sleep performance: ${todaySleepPerformance}%` : ''}
+${todayDisturbances !== null ? `- Sleep disturbances: ${todayDisturbances}` : ''}
+${todayStrainYesterday !== null ? `- Yesterday's strain: ${todayStrainYesterday}` : ''}
 
 Provide insights specific to THIS player's actual numbers. Reference their real scores and patterns. Be encouraging but honest.`
 

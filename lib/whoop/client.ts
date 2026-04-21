@@ -12,6 +12,9 @@ export interface WhoopData {
   remHours: number | null
   deepSleepHours: number | null
   sleepPerformance: number | null
+  sleepDisturbances: number | null
+  sleepEfficiency: number | null
+  strainYesterday: number | null
   weeklyRecovery: Array<{ date: string; score: number }>
 }
 
@@ -139,7 +142,7 @@ export async function getRecovery(
 export async function getSleep(
   accessToken: string,
   log: WhoopDebugLog
-): Promise<Pick<WhoopData, 'sleepHours' | 'remHours' | 'deepSleepHours' | 'sleepPerformance'> | null> {
+): Promise<Pick<WhoopData, 'sleepHours' | 'remHours' | 'deepSleepHours' | 'sleepPerformance' | 'sleepDisturbances' | 'sleepEfficiency'> | null> {
   // Fetch recent records — v2 API, limit=3 so we can skip past any naps
   const data = await whoopFetch(
     '/activity/sleep?limit=3',
@@ -167,8 +170,10 @@ export async function getSleep(
         total_light_sleep_time_milli?: number
         total_slow_wave_sleep_time_milli?: number
         total_rem_sleep_time_milli?: number
+        disturbance_count?: number
       }
       sleep_performance_percentage?: number
+      sleep_efficiency_percentage?: number
     }
   }
   const r = record as SleepRecord
@@ -184,9 +189,32 @@ export async function getSleep(
     remHours: asHours(stage?.total_rem_sleep_time_milli ?? 0),
     deepSleepHours: asHours(stage?.total_slow_wave_sleep_time_milli ?? 0),
     sleepPerformance: r.score?.sleep_performance_percentage ?? null,
+    sleepDisturbances: stage?.disturbance_count ?? null,
+    sleepEfficiency: r.score?.sleep_efficiency_percentage ?? null,
   }
   log.sleep.result = result
   return result
+}
+
+export async function getYesterdayStrain(accessToken: string): Promise<number | null> {
+  try {
+    const res = await fetch(`${WHOOP_BASE}/cycle?limit=2`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: 'no-store',
+    })
+    if (!res.ok) return null
+    const data = await res.json() as { records?: unknown[] }
+    type CycleRecord = { score_state: string; score?: { strain?: number } }
+    const records = (data.records ?? []) as CycleRecord[]
+    // Most recent cycle is today (in progress), second is yesterday (complete)
+    const yesterday = records.find((r, i) => i > 0 && r.score_state === 'SCORED')
+      ?? records.find((r) => r.score_state === 'SCORED')
+    return yesterday?.score?.strain != null
+      ? Math.round(yesterday.score.strain * 10) / 10
+      : null
+  } catch {
+    return null
+  }
 }
 
 export async function refreshWhoopToken(
@@ -290,7 +318,7 @@ export async function getWhoopData(
     cache: 'no-store',
   })
 
-  const [recoveryData, sleepData, weeklyRes] = await Promise.all([
+  const [recoveryData, sleepData, strainYesterday, weeklyRes] = await Promise.all([
     getRecovery(accessToken, log).catch((err) => {
       console.log('[WHOOP] getRecovery threw:', err.message)
       log.recovery.error = err.message
@@ -301,6 +329,7 @@ export async function getWhoopData(
       log.sleep.error = err.message
       return null
     }),
+    getYesterdayStrain(accessToken).catch(() => null),
     weeklyFetch,
   ])
 
@@ -333,6 +362,9 @@ export async function getWhoopData(
     remHours: sleepData?.remHours ?? null,
     deepSleepHours: sleepData?.deepSleepHours ?? null,
     sleepPerformance: sleepData?.sleepPerformance ?? null,
+    sleepDisturbances: sleepData?.sleepDisturbances ?? null,
+    sleepEfficiency: sleepData?.sleepEfficiency ?? null,
+    strainYesterday: strainYesterday ?? null,
     weeklyRecovery,
   }
 
