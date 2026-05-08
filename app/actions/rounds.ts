@@ -60,7 +60,7 @@ export async function saveRound(payload: RoundPayload): Promise<{ error: string 
   let whoopStrainYesterday: number | null = null
 
   if (whoopToken) {
-    const whoopData = await getWhoopData(user.id).catch(() => null)
+    const whoopData = await getWhoopData(user.id, undefined, payload.datePlayed).catch(() => null)
     if (whoopData) {
       whoopRecovery = whoopData.recoveryScore
       whoopHrv = whoopData.hrv

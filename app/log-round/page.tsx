@@ -57,6 +57,7 @@ export default function CourseSearchPage() {
   const [teeBox, setTeeBox] = useState<string>('White')
   const [transport, setTransport] = useState<'walking' | 'cart'>('walking')
   const [holesCount, setHolesCount] = useState<'18' | 'front9' | 'back9'>('18')
+  const [datePlayed, setDatePlayed] = useState<string>(new Date().toISOString().split('T')[0])
   const [starting, setStarting] = useState(false)
   const [step, setStep] = useState<'search' | 'setup' | 'upload'>('search')
   const [uploading, setUploading] = useState(false)
@@ -152,6 +153,7 @@ export default function CourseSearchPage() {
           teeBox,
           transport,
           holes,
+          datePlayed,
         })
       )
       router.push('/log-round/scorecard')
@@ -170,6 +172,7 @@ export default function CourseSearchPage() {
           teeBox,
           transport,
           holes: fallbackHoles,
+          datePlayed,
         })
       )
       router.push('/log-round/scorecard')
@@ -472,6 +475,20 @@ export default function CourseSearchPage() {
                 </button>
               ))}
             </div>
+          </section>
+
+          {/* Date */}
+          <section>
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2 px-1">
+              Date Played
+            </h2>
+            <input
+              type="date"
+              value={datePlayed}
+              max={new Date().toISOString().split('T')[0]}
+              onChange={(e) => setDatePlayed(e.target.value)}
+              className="w-full rounded-2xl border border-[#2a3d2c] bg-[#1a2e1d] px-4 py-3.5 text-sm text-white focus:border-[#4ade80]/50 focus:outline-none focus:ring-1 focus:ring-[#4ade80]/30 [color-scheme:dark]"
+            />
           </section>
 
           {/* Start button */}

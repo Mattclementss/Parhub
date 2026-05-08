@@ -95,15 +95,14 @@ async function whoopFetch(
 
 export async function getRecovery(
   accessToken: string,
-  log: WhoopDebugLog
+  log: WhoopDebugLog,
+  date?: string // YYYY-MM-DD
 ): Promise<Pick<WhoopData, 'recoveryScore' | 'hrv' | 'restingHeartRate'> | null> {
-  // Fetch the most recent record — v2 API, limit=1 returns latest
-  const data = await whoopFetch(
-    '/recovery?limit=1',
-    accessToken,
-    log,
-    'recovery'
-  )
+  // If a specific date is requested, fetch a window around that date
+  const path = date
+    ? `/recovery?start=${date}T00:00:00.000Z&end=${date}T23:59:59.999Z&limit=1`
+    : '/recovery?limit=1'
+  const data = await whoopFetch(path, accessToken, log, 'recovery')
   const records = (data.records as unknown[]) ?? []
   console.log(`[WHOOP] recovery records count: ${records.length}`)
 
@@ -141,15 +140,14 @@ export async function getRecovery(
 
 export async function getSleep(
   accessToken: string,
-  log: WhoopDebugLog
+  log: WhoopDebugLog,
+  date?: string // YYYY-MM-DD — fetches sleep ending on this date (i.e. the night before)
 ): Promise<Pick<WhoopData, 'sleepHours' | 'remHours' | 'deepSleepHours' | 'sleepPerformance' | 'sleepDisturbances' | 'sleepEfficiency'> | null> {
-  // Fetch recent records — v2 API, limit=3 so we can skip past any naps
-  const data = await whoopFetch(
-    '/activity/sleep?limit=3',
-    accessToken,
-    log,
-    'sleep'
-  )
+  // Sleep for a given day ended that morning — search the prior evening to that morning
+  const path = date
+    ? `/activity/sleep?start=${date}T00:00:00.000Z&end=${date}T14:00:00.000Z&limit=3`
+    : '/activity/sleep?limit=3'
+  const data = await whoopFetch(path, accessToken, log, 'sleep')
   const records = (data.records as unknown[]) ?? []
   console.log(`[WHOOP] sleep records count: ${records.length}`)
 
@@ -196,9 +194,19 @@ export async function getSleep(
   return result
 }
 
-export async function getYesterdayStrain(accessToken: string): Promise<number | null> {
+export async function getYesterdayStrain(accessToken: string, date?: string): Promise<number | null> {
   try {
-    const res = await fetch(`${WHOOP_BASE}/cycle?limit=2`, {
+    // If a specific date, fetch the prior day's cycle
+    let path: string
+    if (date) {
+      const d = new Date(date)
+      d.setDate(d.getDate() - 1)
+      const prev = d.toISOString().split('T')[0]
+      path = `/cycle?start=${prev}T00:00:00.000Z&end=${date}T00:00:00.000Z&limit=1`
+    } else {
+      path = `/cycle?limit=2`
+    }
+    const res = await fetch(`${WHOOP_BASE}${path}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
       cache: 'no-store',
     })
@@ -206,11 +214,11 @@ export async function getYesterdayStrain(accessToken: string): Promise<number | 
     const data = await res.json() as { records?: unknown[] }
     type CycleRecord = { score_state: string; score?: { strain?: number } }
     const records = (data.records ?? []) as CycleRecord[]
-    // Most recent cycle is today (in progress), second is yesterday (complete)
-    const yesterday = records.find((r, i) => i > 0 && r.score_state === 'SCORED')
-      ?? records.find((r) => r.score_state === 'SCORED')
-    return yesterday?.score?.strain != null
-      ? Math.round(yesterday.score.strain * 10) / 10
+    const target = date
+      ? records.find((r) => r.score_state === 'SCORED')
+      : records.find((r, i) => i > 0 && r.score_state === 'SCORED') ?? records.find((r) => r.score_state === 'SCORED')
+    return target?.score?.strain != null
+      ? Math.round(target.score.strain * 10) / 10
       : null
   } catch {
     return null
@@ -243,7 +251,8 @@ export async function refreshWhoopToken(
 
 export async function getWhoopData(
   userId: string,
-  debugLog?: WhoopDebugLog
+  debugLog?: WhoopDebugLog,
+  date?: string // YYYY-MM-DD — if provided, fetch data for that specific date
 ): Promise<WhoopData | null> {
   const log: WhoopDebugLog = debugLog ?? {
     timestamp: new Date().toISOString(),
@@ -319,17 +328,17 @@ export async function getWhoopData(
   })
 
   const [recoveryData, sleepData, strainYesterday, weeklyRes] = await Promise.all([
-    getRecovery(accessToken, log).catch((err) => {
+    getRecovery(accessToken, log, date).catch((err) => {
       console.log('[WHOOP] getRecovery threw:', err.message)
       log.recovery.error = err.message
       return null
     }),
-    getSleep(accessToken, log).catch((err) => {
+    getSleep(accessToken, log, date).catch((err) => {
       console.log('[WHOOP] getSleep threw:', err.message)
       log.sleep.error = err.message
       return null
     }),
-    getYesterdayStrain(accessToken).catch(() => null),
+    getYesterdayStrain(accessToken, date).catch(() => null),
     weeklyFetch,
   ])
 
