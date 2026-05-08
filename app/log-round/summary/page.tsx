@@ -21,6 +21,7 @@ interface RoundState {
   teeBox: string
   transport: 'walking' | 'cart'
   holes: HoleScore[]
+  datePlayed?: string | null
 }
 
 function relDisplay(rel: number): string {
@@ -84,7 +85,7 @@ export default function SummaryPage() {
     if (!round) return
     setSaving(true)
     setError(null)
-    const result = await saveRound({ ...round, notes })
+    const result = await saveRound({ ...round, notes, datePlayed: round.datePlayed ?? undefined })
     if (result?.error) {
       setError(result.error)
       setSaving(false)

@@ -57,9 +57,12 @@ export default function CourseSearchPage() {
   const [teeBox, setTeeBox] = useState<string>('White')
   const [transport, setTransport] = useState<'walking' | 'cart'>('walking')
   const [starting, setStarting] = useState(false)
-  const [step, setStep] = useState<'search' | 'setup'>('search')
+  const [step, setStep] = useState<'search' | 'setup' | 'upload'>('search')
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     inputRef.current?.focus()
@@ -89,7 +92,6 @@ export default function CourseSearchPage() {
   async function handleSelectCourse(course: Course) {
     setSelectedCourse(course)
     setStep('setup')
-    // Fetch available tees for this course
     try {
       const res = await fetch(`/api/courses/${course.id}`)
       const data = await res.json()
@@ -148,7 +150,6 @@ export default function CourseSearchPage() {
       )
       router.push('/log-round/scorecard')
     } catch {
-      // Fallback: navigate with generic par-4 holes
       sessionStorage.setItem(
         'parhub_round',
         JSON.stringify({
@@ -160,6 +161,48 @@ export default function CourseSearchPage() {
         })
       )
       router.push('/log-round/scorecard')
+    }
+  }
+
+  async function handleUpload(file: File) {
+    setUploading(true)
+    setUploadError(null)
+    try {
+      const formData = new FormData()
+      formData.append('image', file)
+      const res = await fetch('/api/scorecard/parse', { method: 'POST', body: formData })
+      const data = await res.json()
+      if (!res.ok) {
+        setUploadError(data.error ?? 'Could not read scorecard')
+        setUploading(false)
+        return
+      }
+
+      const holes = (data.holes as Array<{ hole: number; par: number; score: number }>).map((h) => ({
+        hole: h.hole,
+        par: h.par,
+        yardage: 0,
+        score: h.score,
+        putts: null,
+        fairwayHit: null,
+        gir: null,
+      }))
+
+      sessionStorage.setItem(
+        'parhub_round',
+        JSON.stringify({
+          courseId: '',
+          courseName: data.courseName ?? 'Unknown Course',
+          teeBox: 'White',
+          transport: 'walking',
+          holes,
+          datePlayed: data.date ?? null,
+        })
+      )
+      router.push('/log-round/summary')
+    } catch {
+      setUploadError('Something went wrong. Please try again.')
+      setUploading(false)
     }
   }
 
@@ -176,13 +219,13 @@ export default function CourseSearchPage() {
             </svg>
           </Link>
           <h1 className="text-base font-semibold text-white">
-            {step === 'search' ? 'Find a Course' : 'Round Setup'}
+            {step === 'search' ? 'Find a Course' : step === 'upload' ? 'Upload Scorecard' : 'Round Setup'}
           </h1>
         </div>
       </header>
 
       {step === 'search' && (
-        <div className="flex-1 mx-auto w-full max-w-lg px-4 pt-5">
+        <div className="flex-1 mx-auto w-full max-w-lg px-4 pt-5 space-y-4">
           {/* Search input */}
           <div className="relative">
             <svg
@@ -211,7 +254,7 @@ export default function CourseSearchPage() {
 
           {/* Results */}
           {results.length > 0 && (
-            <div className="mt-3 rounded-2xl bg-[#1a2e1d] border border-[#2a3d2c] overflow-hidden divide-y divide-[#2a2a2a] shadow-sm">
+            <div className="rounded-2xl bg-[#1a2e1d] border border-[#2a3d2c] overflow-hidden divide-y divide-[#2a2a2a] shadow-sm">
               {results.map((course) => (
                 <button
                   key={course.id}
@@ -232,11 +275,96 @@ export default function CourseSearchPage() {
           )}
 
           {query.length >= 2 && !searching && results.length === 0 && (
-            <p className="mt-6 text-center text-sm text-gray-400">No courses found for "{query}"</p>
+            <p className="mt-2 text-center text-sm text-gray-400">No courses found for "{query}"</p>
           )}
 
           {query.length === 0 && (
-            <p className="mt-8 text-center text-sm text-gray-400">Type at least 2 characters to search</p>
+            <p className="mt-4 text-center text-sm text-gray-400">Type at least 2 characters to search</p>
+          )}
+
+          {/* Divider */}
+          <div className="flex items-center gap-3 py-2">
+            <div className="flex-1 h-px bg-[#2a3d2c]" />
+            <span className="text-xs text-gray-600 font-medium">or</span>
+            <div className="flex-1 h-px bg-[#2a3d2c]" />
+          </div>
+
+          {/* Upload scorecard */}
+          <button
+            onClick={() => setStep('upload')}
+            className="w-full rounded-2xl border-2 border-dashed border-[#2a3d2c] bg-[#1a2e1d] px-4 py-5 flex flex-col items-center gap-2 hover:border-[#4ade80]/40 hover:bg-[#1e3220] transition-all"
+          >
+            <svg className="w-7 h-7 text-[#4ade80]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+            </svg>
+            <p className="text-sm font-bold text-white">Upload Golf Canada Scorecard</p>
+            <p className="text-xs text-gray-500">Screenshot → AI reads your scores automatically</p>
+          </button>
+        </div>
+      )}
+
+      {step === 'upload' && (
+        <div className="flex-1 mx-auto w-full max-w-lg px-4 pt-5 space-y-4 pb-8">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) handleUpload(file)
+            }}
+          />
+
+          {uploading ? (
+            <div className="rounded-2xl bg-[#1a2e1d] border border-[#2a3d2c] px-5 py-12 flex flex-col items-center gap-4">
+              <div className="flex gap-1.5">
+                {[0, 1, 2].map((i) => (
+                  <div
+                    key={i}
+                    className="w-2 h-2 rounded-full bg-[#4ade80] animate-bounce"
+                    style={{ animationDelay: `${i * 0.15}s` }}
+                  />
+                ))}
+              </div>
+              <p className="text-sm font-semibold text-white">Reading your scorecard…</p>
+              <p className="text-xs text-gray-500">This takes a few seconds</p>
+            </div>
+          ) : (
+            <>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full rounded-2xl border-2 border-dashed border-[#2a3d2c] bg-[#1a2e1d] px-4 py-10 flex flex-col items-center gap-3 hover:border-[#4ade80]/40 hover:bg-[#1e3220] transition-all active:scale-[0.98]"
+              >
+                <svg className="w-10 h-10 text-[#4ade80]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.25}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 20.25h18M3.75 3h16.5A.75.75 0 0121 3.75v13.5a.75.75 0 01-.75.75H3.75A.75.75 0 013 17.25V3.75A.75.75 0 013.75 3z" />
+                </svg>
+                <div className="text-center">
+                  <p className="text-sm font-bold text-white">Tap to choose screenshot</p>
+                  <p className="text-xs text-gray-500 mt-1">Golf Canada scorecard screenshot</p>
+                </div>
+              </button>
+
+              {uploadError && (
+                <div className="rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
+                  {uploadError}
+                </div>
+              )}
+
+              <div className="rounded-2xl bg-[#1a2e1d] border border-[#2a3d2c] px-4 py-3 space-y-1.5">
+                <p className="text-xs font-semibold text-gray-400">How it works</p>
+                <p className="text-xs text-gray-600">1. Take a screenshot of your Golf Canada scorecard</p>
+                <p className="text-xs text-gray-600">2. Upload it here — AI reads hole-by-hole scores automatically</p>
+                <p className="text-xs text-gray-600">3. Review and save — add putts, GIR & fairways if you want</p>
+              </div>
+
+              <button
+                onClick={() => { setStep('search'); setUploadError(null) }}
+                className="w-full text-sm text-gray-400 hover:text-gray-300 py-1"
+              >
+                ← Search for a course instead
+              </button>
+            </>
           )}
         </div>
       )}
@@ -263,9 +391,7 @@ export default function CourseSearchPage() {
             <div className="rounded-2xl bg-[#1a2e1d] border border-[#2a3d2c] overflow-hidden divide-y divide-[#2a2a2a]">
               {displayTees.map((tee) => {
                 const isStandard = (TEE_COLORS as readonly string[]).includes(tee)
-                const dotClass = isStandard
-                  ? TEE_DOT[tee as TeeColor]
-                  : 'bg-gray-400'
+                const dotClass = isStandard ? TEE_DOT[tee as TeeColor] : 'bg-gray-400'
                 return (
                   <button
                     key={tee}

@@ -21,6 +21,7 @@ export interface RoundPayload {
   transport: 'walking' | 'cart'
   holes: HoleScore[]
   notes: string
+  datePlayed?: string
 }
 
 export async function saveRound(payload: RoundPayload): Promise<{ error: string } | null> {
@@ -80,7 +81,7 @@ export async function saveRound(payload: RoundPayload): Promise<{ error: string 
       user_id: user.id,
       course_name: payload.courseName,
       course_id: payload.courseId,
-      date_played: new Date().toISOString().split('T')[0],
+      date_played: payload.datePlayed ?? new Date().toISOString().split('T')[0],
       total_score: totalScore || null,
       total_putts: totalPutts || null,
       fairways_hit: fairwaysHit,
