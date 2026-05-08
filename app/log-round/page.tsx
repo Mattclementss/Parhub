@@ -59,9 +59,11 @@ export default function CourseSearchPage() {
   const [holesCount, setHolesCount] = useState<'18' | 'front9' | 'back9'>('18')
   const [datePlayed, setDatePlayed] = useState<string>(new Date().toISOString().split('T')[0])
   const [starting, setStarting] = useState(false)
-  const [step, setStep] = useState<'search' | 'setup' | 'upload'>('search')
+  const [step, setStep] = useState<'search' | 'setup' | 'upload' | 'upload-confirm'>('search')
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [uploadedRound, setUploadedRound] = useState<{ courseName: string; holes: Array<{ hole: number; par: number; score: number }> } | null>(null)
+  const [uploadDate, setUploadDate] = useState<string>(new Date().toISOString().split('T')[0])
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -193,28 +195,11 @@ export default function CourseSearchPage() {
         return
       }
 
-      const holes = (data.holes as Array<{ hole: number; par: number; score: number }>).map((h) => ({
-        hole: h.hole,
-        par: h.par,
-        yardage: 0,
-        score: h.score,
-        putts: null,
-        fairwayHit: null,
-        gir: null,
-      }))
-
-      sessionStorage.setItem(
-        'parhub_round',
-        JSON.stringify({
-          courseId: '',
-          courseName: data.courseName ?? 'Unknown Course',
-          teeBox: 'White',
-          transport: 'walking',
-          holes,
-          datePlayed: data.date ?? null,
-        })
-      )
-      router.push('/log-round/summary')
+      const holes = data.holes as Array<{ hole: number; par: number; score: number }>
+      setUploadedRound({ courseName: data.courseName ?? 'Unknown Course', holes })
+      if (data.date) setUploadDate(data.date)
+      setUploading(false)
+      setStep('upload-confirm')
     } catch {
       setUploadError('Something went wrong. Please try again.')
       setUploading(false)
@@ -234,7 +219,7 @@ export default function CourseSearchPage() {
             </svg>
           </Link>
           <h1 className="text-base font-semibold text-white">
-            {step === 'search' ? 'Find a Course' : step === 'upload' ? 'Upload Scorecard' : 'Round Setup'}
+            {step === 'search' ? 'Find a Course' : step === 'upload' || step === 'upload-confirm' ? 'Upload Scorecard' : 'Round Setup'}
           </h1>
         </div>
       </header>
@@ -381,6 +366,64 @@ export default function CourseSearchPage() {
               </button>
             </>
           )}
+        </div>
+      )}
+
+      {step === 'upload-confirm' && uploadedRound && (
+        <div className="flex-1 mx-auto w-full max-w-lg px-4 pt-5 space-y-4 pb-8">
+          {/* Parsed result */}
+          <div className="rounded-2xl bg-[#1a2e1d] border border-[#2a3d2c] px-4 py-3.5">
+            <p className="text-xs font-semibold uppercase tracking-wider text-[#4ade80] mb-1">Scorecard Read</p>
+            <p className="text-sm font-bold text-white">{uploadedRound.courseName}</p>
+            <p className="text-xs text-gray-500 mt-0.5">{uploadedRound.holes.length} holes detected</p>
+          </div>
+
+          {/* Date picker */}
+          <section>
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2 px-1">
+              Date Played
+            </h2>
+            <input
+              type="date"
+              value={uploadDate}
+              max={new Date().toISOString().split('T')[0]}
+              onChange={(e) => setUploadDate(e.target.value)}
+              className="w-full rounded-2xl border border-[#2a3d2c] bg-[#1a2e1d] px-4 py-3.5 text-sm text-white focus:border-[#4ade80]/50 focus:outline-none focus:ring-1 focus:ring-[#4ade80]/30 [color-scheme:dark]"
+            />
+          </section>
+
+          <button
+            onClick={() => {
+              const holes = uploadedRound.holes.map((h) => ({
+                hole: h.hole,
+                par: h.par,
+                yardage: 0,
+                score: h.score,
+                putts: null,
+                fairwayHit: null,
+                gir: null,
+              }))
+              sessionStorage.setItem('parhub_round', JSON.stringify({
+                courseId: '',
+                courseName: uploadedRound.courseName,
+                teeBox: 'White',
+                transport: 'walking',
+                holes,
+                datePlayed: uploadDate,
+              }))
+              router.push('/log-round/summary')
+            }}
+            className="w-full rounded-2xl bg-[#4ade80] px-6 py-4 text-base font-black text-black hover:bg-[#22c55e] active:scale-[0.98] transition-all"
+          >
+            Continue to Summary
+          </button>
+
+          <button
+            onClick={() => { setStep('upload'); setUploadedRound(null) }}
+            className="w-full text-sm text-gray-400 hover:text-gray-300 py-1"
+          >
+            ← Upload a different screenshot
+          </button>
         </div>
       )}
 
