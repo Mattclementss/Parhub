@@ -56,6 +56,7 @@ export default function CourseSearchPage() {
   const [availableTees, setAvailableTees] = useState<string[]>([])
   const [teeBox, setTeeBox] = useState<string>('White')
   const [transport, setTransport] = useState<'walking' | 'cart'>('walking')
+  const [holesCount, setHolesCount] = useState<'18' | 'front9' | 'back9'>('18')
   const [starting, setStarting] = useState(false)
   const [step, setStep] = useState<'search' | 'setup' | 'upload'>('search')
   const [uploading, setUploading] = useState(false)
@@ -125,18 +126,23 @@ export default function CourseSearchPage() {
       const selectedTee =
         apiTees.find((t) => t.tee_name.toLowerCase() === teeBox.toLowerCase()) ?? apiTees[0]
 
-      const holes =
-        selectedTee?.holes?.length === 18
-          ? selectedTee.holes.map((h, i) => ({
-              hole: i + 1,
-              par: h.par,
-              yardage: h.yardage ?? 0,
-              score: null,
-              putts: null,
-              fairwayHit: null,
-              gir: null,
-            }))
-          : buildFallbackHoles()
+      const allHoles = selectedTee?.holes?.length === 18
+        ? selectedTee.holes.map((h, i) => ({
+            hole: i + 1,
+            par: h.par,
+            yardage: h.yardage ?? 0,
+            score: null,
+            putts: null,
+            fairwayHit: null,
+            gir: null,
+          }))
+        : buildFallbackHoles()
+
+      const holes = holesCount === 'front9'
+        ? allHoles.slice(0, 9)
+        : holesCount === 'back9'
+        ? allHoles.slice(9, 18)
+        : allHoles
 
       sessionStorage.setItem(
         'parhub_round',
@@ -150,6 +156,12 @@ export default function CourseSearchPage() {
       )
       router.push('/log-round/scorecard')
     } catch {
+      const fallback = buildFallbackHoles()
+      const fallbackHoles = holesCount === 'front9'
+        ? fallback.slice(0, 9)
+        : holesCount === 'back9'
+        ? fallback.slice(9, 18)
+        : fallback
       sessionStorage.setItem(
         'parhub_round',
         JSON.stringify({
@@ -157,7 +169,7 @@ export default function CourseSearchPage() {
           courseName: selectedCourse.club_name,
           teeBox,
           transport,
-          holes: buildFallbackHoles(),
+          holes: fallbackHoles,
         })
       )
       router.push('/log-round/scorecard')
@@ -382,6 +394,28 @@ export default function CourseSearchPage() {
               </p>
             )}
           </div>
+
+          {/* Holes */}
+          <section>
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2 px-1">
+              Holes
+            </h2>
+            <div className="grid grid-cols-3 gap-2">
+              {([['18', '18 Holes'], ['front9', 'Front 9'], ['back9', 'Back 9']] as const).map(([val, label]) => (
+                <button
+                  key={val}
+                  onClick={() => setHolesCount(val)}
+                  className={`rounded-2xl border-2 px-2 py-3 text-sm font-semibold transition-all ${
+                    holesCount === val
+                      ? 'border-[#4ade80] bg-[#4ade80]/10 text-[#4ade80]'
+                      : 'border-[#2a3d2c] bg-[#1a2e1d] text-gray-400'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </section>
 
           {/* Tee box */}
           <section>
